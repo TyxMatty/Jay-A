@@ -1,12 +1,14 @@
-//! Jay-A's window and tray icon. The audio engine (crates/jay-audio) comes in stage 1
-//! (docs/ARQUITETURA.md).
+//! Jay-A's window and tray icon, and the commands over the audio engine (crates/jay-audio).
 
 // Prevents an additional console window on Windows in release, DO NOT REMOVE!!
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+#[cfg(windows)]
+mod audio;
+
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Manager, State, WindowEvent, Wry};
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent, Wry};
 
 /// The tray menu's items: built in English, relabelled by the page in its language.
 struct TrayItems {
@@ -42,12 +44,27 @@ fn main() {
                 show_main(app);
             }
         }))
-        .invoke_handler(tauri::generate_handler![set_tray_labels])
+        .invoke_handler(tauri::generate_handler![
+            set_tray_labels,
+            #[cfg(windows)]
+            audio::list_mics,
+            #[cfg(windows)]
+            audio::start_mic,
+            #[cfg(windows)]
+            audio::stop_mic,
+            #[cfg(windows)]
+            audio::set_monitor
+        ])
         .on_window_event(|window, event| {
             // Closing the window keeps Jay-A in the tray, so the filters keep working during calls.
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = window.hide();
+                // But a microphone test ends: nobody is looking at the meter anymore.
+                #[cfg(windows)]
+                if window.state::<audio::MicState>().0.lock().is_ok_and(|mut mic| mic.take().is_some()) {
+                    let _ = window.emit("mic-stopped", ());
+                }
             }
         })
         .setup(|app| {
@@ -71,6 +88,8 @@ fn main() {
                 })
                 .build(app)?;
             app.manage(TrayItems { open, quit });
+            #[cfg(windows)]
+            app.manage(audio::MicState::default());
             // The window starts hidden (tauri.conf.json), so --background never flashes it.
             if !background(&std::env::args().collect::<Vec<_>>()) {
                 show_main(app.handle());

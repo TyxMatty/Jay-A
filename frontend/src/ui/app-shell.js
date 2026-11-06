@@ -1,8 +1,9 @@
 // The window: top bar, then the sections (Filters, Soundboard, Editor, Convert, Settings) as tabs.
-// The audio sections are placeholders until their stage in docs/ARQUITETURA.md.
+// Sections not built yet are placeholders until their stage in docs/ARQUITETURA.md.
 import { h } from './dom.js';
 import { icons } from './icons.js';
 import { createTabs } from './tabs.js';
+import { createFiltersPanel } from './filters.js';
 import { toggleTheme, currentTheme } from './theme.js';
 import { settings } from '../store/settings.js';
 import { resolveStyle } from '../core/style.js';
@@ -128,11 +129,7 @@ const tabLabel = (icon, text) => h('span', { class: 'tab-label' }, h('span', { c
 
 export function mountApp(root) {
   const items = [
-    {
-      key: 'filters',
-      label: tabLabel(icons.mic, t('Filters')),
-      panel: placeholder(t('Filters'), t('Echo, noise and gain cleanup, volume, sensitivity, EQ and presets for your microphone. Jay-C will use them in calls.'), 1),
-    },
+    { key: 'filters', label: tabLabel(icons.mic, t('Filters')), panel: createFiltersPanel() },
     {
       key: 'soundboard',
       label: tabLabel(icons.pads, t('Soundboard')),

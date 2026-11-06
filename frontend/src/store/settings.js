@@ -9,6 +9,14 @@ export const DEFAULT_SETTINGS = Object.freeze({
   style: 'calm',
   /** Interface language: 'system' (the OS language), 'en' or 'pt-BR' (core/i18n.js). */
   language: 'system',
+  // shortcut: the mic settings live here while only the page uses them; they move to the engine's
+  // config.json in stage 3, when the engine must run them with the window closed (Jay Link).
+  /** Microphone endpoint id (the engine's list_mics), or null = the Windows default. */
+  micDevice: null,
+  noiseSuppression: true,
+  autoGainControl: true,
+  /** "Hear my microphone" during the test. */
+  monitor: false,
 });
 
 function load() {

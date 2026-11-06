@@ -1,0 +1,18 @@
+[package]
+name = "jay-audio"
+version = "0.1.0"
+description = "Jay-A's audio engine: microphone, WebRTC audio processing, monitor"
+authors = ["TyxMatty"]
+edition = "2024"
+rust-version = "1.90"
+links = "jay-audio"
+
+[dependencies]
+log = "0.4"
+serde = { version = "1", features = ["derive"] }
+
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.26"
+
+[build-dependencies]
+cc = "1"

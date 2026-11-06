@@ -11,8 +11,27 @@ export default {
   "Convert": "Converter",
   "Settings": "Configurações",
   "Coming in stage {n}.": "Chega na etapa {n}.",
-  "Echo, noise and gain cleanup, volume, sensitivity, EQ and presets for your microphone. Jay-C will use them in calls.":
-    "Eco, ruído e ganho, volume, sensibilidade, equalizador e presets pro seu microfone. O Jay-C vai usar tudo isso nas chamadas.",
+  "The microphone only works in the Jay-A app, not in the browser.": "O microfone só funciona no app do Jay-A, não no navegador.",
+  "Microphone": "Microfone",
+  "Windows default": "Padrão do Windows",
+  "Noise suppression": "Supressão de ruído",
+  "Removes steady noise like fans and hiss. Turn it off to play an instrument.":
+    "Tira ruídos constantes, como ventilador e chiado. Desligue pra tocar um instrumento.",
+  "Automatic gain": "Ganho automático",
+  "Keeps your voice at a similar volume, near or far from the microphone.":
+    "Deixa sua voz num volume parecido, perto ou longe do microfone.",
+  "Hear my microphone": "Ouvir meu microfone",
+  "Use headphones: on speakers, the microphone picks itself up again and howls.":
+    "Use fones: no alto-falante, o microfone capta o próprio som de novo e dá microfonia.",
+  "Level": "Nível",
+  "Test microphone": "Testar microfone",
+  "Stop test": "Parar o teste",
+  "Silence": "Silêncio",
+  "Testing: {device}": "Testando: {device}",
+  "The microphone stopped: {error}": "O microfone parou: {error}",
+  "Couldn't open the microphone: {error}": "Não deu pra abrir o microfone: {error}",
+  "Echo cancellation arrives with the Jay-C link (stage 3); volume, sensitivity, EQ and presets in stage 2.":
+    "O cancelamento de eco chega com a ligação ao Jay-C (etapa 3). Volume, sensibilidade, equalizador e presets chegam na etapa 2.",
   "Clips that play in the call and in your headphones, with a click or a global shortcut.":
     "Clipes que tocam na chamada e nos seus fones, com um clique ou um atalho global.",
   "Cut, fade, normalize and filter audio files, without touching the original.":

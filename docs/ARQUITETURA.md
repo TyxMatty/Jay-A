@@ -51,7 +51,7 @@ flowchart LR
 | Por que não ffmpeg | — | Um ffmpeg completo tem ~80–130 MB, e a linha Jay é leve (o Jay-C tem 3,9 MB). E os efeitos dos arquivos seriam filtros do ffmpeg, diferentes dos do microfone: duas implementações. Com o engine próprio, **a mesma cadeia de filtros serve ao vivo e nos arquivos**. |
 | Atalhos globais | `tauri-plugin-global-shortcut` | Tocar o soundboard com um jogo em foco. |
 | Bandeja e instância única | `tray-icon` do Tauri + `tauri-plugin-single-instance` | O Jay-C pode iniciar o Jay-A sem abrir um segundo engine. |
-| Persistência | **`config.json`** na pasta de configuração do app, lido pelo engine | O engine precisa dos filtros mesmo com a janela fechada, então a configuração não pode ficar no `localStorage` da página (como no Jay-C). A UI lê e grava por comandos. |
+| Persistência | **`config.json`** na pasta de configuração do app, lido pelo engine | O engine precisa dos filtros mesmo com a janela fechada, então a configuração não pode ficar no `localStorage` da página (como no Jay-C). A UI lê e grava por comandos. Até a etapa 3, as opções do microfone ficam no `localStorage`, porque só a página as usa. |
 | Formato interno | 48 kHz, f32, quadros de 10 ms (480 amostras) | É o quadro do APM e do RNNoise. O link entrega blocos de 20 ms, como o microfone nativo do Jay-C hoje. |
 
 ## 3. Estrutura do repositório
@@ -62,15 +62,19 @@ Jay-A/
 ├─ docs/ARQUITETURA.md
 ├─ crates/jay-audio/             # engine: sem Tauri, testável com cargo test
 │  ├─ build.rs                   # compila o WebRTC APM (Meson + MSVC), como no Jay-C
-│  ├─ native/jay_apm.cpp         # camada C do APM (o jayc_apm.cpp do Jay-C)
-│  ├─ third_party/webrtc-audio-processing/
+│  ├─ native/jayc_apm.cpp        # camada C do APM, igual à do Jay-C
+│  ├─ third_party/webrtc-audio-processing/   # igual à do Jay-C
 │  └─ src/
-│     ├─ lib.rs                  # Engine: estado, comandos, eventos para a UI
-│     ├─ win/                    # WASAPI: microfone, fones, process loopback (do win.rs do Jay-C)
-│     ├─ dsp/                    # apm.rs, gate.rs, biquad.rs, compressor.rs, limiter.rs, chain.rs, presets.rs
+│     ├─ lib.rs                  # constantes, level_db
+│     ├─ apm.rs                  # igual ao do Jay-C (com o teste de eco)
+│     ├─ mic.rs                  # microfone WASAPI + APM (etapa 1, do win.rs do Jay-C)
+│     ├─ monitor.rs              # "Ouvir meu microfone" (etapa 1)
+│     ├─ loopback.rs             # referência de eco: process loopback do Jay-C (etapa 3)
+│     ├─ dsp/                    # gate.rs, biquad.rs, compressor.rs, limiter.rs, chain.rs, presets.rs (etapa 2)
 │     ├─ soundboard.rs           # biblioteca, vozes, mistura
 │     ├─ files/                  # decode.rs, encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
 │     └─ link.rs                 # servidor do Jay Link
+├─ scripts/                      # dev-debug.ps1 (app com depuração na porta 9224) e cdp-eval.mjs (roda JS no app), do Jay-C
 └─ frontend/
    ├─ index.html, vite.config.js, package.json
    ├─ src/
@@ -320,7 +324,7 @@ Cada etapa termina com algo testável.
 | # | Etapa | Pronto quando |
 |---|---|---|
 | 0 ✅ | Scaffold: Tauri v2 + Vite + Vanilla JS, ícones e estilos do Jay-C, bandeja, instância única, `--background` | `npm run dev` abre o Jay-A nos 3 estilos; fechar a janela deixa o ícone na bandeja |
-| 1 | Engine: microfone WASAPI (modo compartilhado) + APM (copiados do Jay-C), monitor e medidor | o teste de eco do Jay-C passa no `jay-audio`; o medidor mostra a voz; "Ouvir meu microfone" funciona |
+| 1 ✅ | Engine: microfone WASAPI (modo compartilhado) + APM (copiados do Jay-C), monitor e medidor | o teste de eco do Jay-C passa no `jay-audio`; o medidor mostra a voz; "Ouvir meu microfone" funciona |
 | 2 | Cadeia de filtros, presets e a aba Filtros | cada bloco tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz); trocar preset ao vivo sem estalo |
 | 3 | Servidor do Jay Link (S1, S2), junto com a I5 do Jay-C | o `jay_a_probe` do Jay-C passa; numa chamada, o outro lado ouve a voz filtrada pelo Jay-A; fechar o Jay-A não corta a voz (a reserva assume); o som de outros apps continua sem abafar (−7,8 dB, spike 09 do Jay-C) |
 | 4 | Soundboard | um clipe tocado por atalho, com um jogo em foco, chega à chamada e aos fones sem voltar como eco |
@@ -329,6 +333,12 @@ Cada etapa termina com algo testável.
 | 7 | Efeitos de voz ao vivo (tom, robô, reverb) + RNNoise (S4) | efeitos ao vivo com a latência extra medida (meta ≤ 40 ms) |
 | 8 | Soundboard dentro do Jay-C | o botão na barra da chamada lista e toca os clipes do Jay-A |
 | 9 | Release: instalador NSIS do Jay-A em `%LOCALAPPDATA%\Jay-A`; o Jay-C oferece o Jay-A | os dois instalados numa máquina limpa fazem uma chamada filtrada; o Jay-C sozinho continua funcionando com o filtro dele |
+
+**Etapa 1, medido (2026-11-06):**
+- **Teste de eco** (`cargo test`): −35,0 dB sem AEC e −68,2 dB com AEC, 33 dB removidos, igual ao Jay-C.
+- **Monitor** (`cargo test -- --ignored`): um tom de 440 Hz a −29 dBFS empurrado no monitor sai na saída padrão a −35,2 dBFS, medido no loopback dela; antes, silêncio digital.
+- **No app, pela depuração remota:** a lista de microfones aparece, e o teste abre e fecha sem erro. Trocar de microfone, de supressão de ruído ou de ganho reabre o microfone na hora. Ligar e desligar o monitor durante o teste não dá erro. Fechar a janela para a bandeja encerra o teste.
+- **Não visto:** o medidor com uma voz de verdade. Neste PC, os microfones são todos virtuais e estavam mudos: o Voicemeeter estava fechado, o Iriun desligado e o Virtual Desktop sem headset. A captura é o código do Jay-C, já medido lá. Também não foi medido se o monitor estala.
 
 ## 13. Decisões em aberto
 
