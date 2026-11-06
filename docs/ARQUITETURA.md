@@ -368,7 +368,10 @@ O cliente está em `plugins/tauri-plugin-system-audio/src/link.rs` do JayC (comm
 - responder `PING` com `PONG`. O Jay-C manda `PING` a cada 5 s e dá o link como morto depois de **10 s sem nenhum quadro**;
 - **ler e escrever no pipe sem uma operação bloquear a outra**: num pipe síncrono, uma leitura pendente trava as escritas no mesmo handle. O pipe usa `FILE_FLAG_OVERLAPPED` (ou uma thread de leitura e outra de escrita que não dividem o mesmo bloqueio). O Jay-A falso do Jay-C (`src/link/fake.rs`) é a referência: `CreateNamedPipeW` com `PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE` e `PIPE_REJECT_REMOTE_CLIENTS`, uma instância por vez;
 - **rodar como o mesmo usuário do Windows que o Jay-C**, sem elevação. O cliente confere o SID do processo servidor (`GetNamedPipeServerProcessId`) e recusa na dúvida;
-- modo byte ou mensagem, tanto faz: o cliente lê em modo byte.
+- modo byte ou mensagem, tanto faz: o cliente lê em modo byte;
+- **atender o próximo cliente depois que um sai**: o Jay-C reconecta quando troca de microfone ou entra de novo numa chamada. Com `FILE_FLAG_FIRST_PIPE_INSTANCE`, criar a instância nova com a antiga ainda aberta falha, e o servidor para de aceitar conexões. Então: **fechar a instância antiga antes de criar a próxima** (a janela sem pipe é coberta pelo Jay-C, que tenta de novo a cada 5 s), ou reusar a mesma com `DisconnectNamedPipe` + `ConnectNamedPipe`, cancelando antes a leitura pendente. O Jay-C caiu nessa armadilha no próprio Jay-A falso e a cobre com o teste `link::tests::the_fake_serves_the_next_client_after_one_leaves` (conecta e desconecta 3 vezes); o servidor do Jay-A precisa de um teste igual.
+
+**Ordem dos `CONTROL` que o Jay-C manda** (medido pela sessão do Jay-C no app de verdade): `{ type: "start-mic" }`, depois `{ type: "call-state", inCall: true, muted: false }`, que é o último estado guardado, reenviado a cada reconexão, e depois um `call-state` a cada vez que o mudo muda.
 
 **Teste:** `cargo run --example jay_a_probe -- [PIPE] [SEGUNDOS]` no plugin `system-audio` do JayC. Ele conecta, faz o `HELLO`, pede o microfone por 30 s e mede os intervalos entre blocos (p50, p99, máximo). Passa se o link não fechou, se veio áudio e se nenhum intervalo passou de 60 ms. Medido pelo Jay-C contra o Jay-A falso: p99 de 32,1 ms, PASS; um travamento de 200 ms dá FAIL, como deve.
 
