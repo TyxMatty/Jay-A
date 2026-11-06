@@ -674,3 +674,230 @@ fieldset > h3 {
   gap: 12px;
   margin-top: 8px;
 }
+
+/* ---------- Filters › Effect chain (ui/chain-editor.js) ---------- */
+
+.chain-editor {
+  max-width: 720px;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.preset-save {
+  display: grid;
+  gap: 6px;
+}
+
+.chain-message ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.chain {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 0;
+  list-style: none;
+}
+
+.effect-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.effect-card.is-off .effect-title,
+.effect-card.is-off .effect-meters {
+  opacity: 0.5;
+}
+
+/* Where a dragged card will land. */
+.effect-card.drop-before {
+  box-shadow: 0 -3px 0 var(--accent);
+}
+
+.effect-card.drop-after {
+  box-shadow: 0 3px 0 var(--accent);
+}
+
+.effect-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+}
+
+.effect-grip {
+  display: inline-grid;
+  color: var(--text-muted);
+  cursor: grab;
+}
+
+.effect-grip svg {
+  width: 18px;
+  height: 18px;
+}
+
+.effect-switch {
+  margin: 0;
+}
+
+.effect-title {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.effect-title:hover {
+  color: var(--accent-text, var(--accent));
+}
+
+.effect-title::after {
+  content: ' ▸';
+  color: var(--text-muted);
+}
+
+.effect-title[aria-expanded='true']::after {
+  content: ' ▾';
+}
+
+.effect-meters {
+  display: grid;
+  gap: 3px;
+  width: 72px;
+}
+
+.meter {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.meter-fill {
+  display: block;
+  width: 0;
+  height: 100%;
+  background: var(--accent);
+  transition: width 60ms linear;
+}
+
+.icon-btn-small {
+  width: 30px;
+  height: 30px;
+}
+
+.icon-btn-small svg {
+  width: 16px;
+  height: 16px;
+}
+
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.effect-body {
+  display: grid;
+  gap: 10px;
+  padding: 8px 12px 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* One parameter: label, slider, value + unit, back to default. */
+.param {
+  display: grid;
+  grid-template-columns: 9.5em minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.param > label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.param > select {
+  grid-column: 2 / span 3;
+}
+
+.param input[type='range'] {
+  width: 100%;
+  accent-color: var(--accent);
+}
+
+.param-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.param-number {
+  width: 6.5em;
+  min-height: 32px;
+  padding: 4px 8px;
+}
+
+.effect-common {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 1px dashed var(--border);
+}
+
+.eq-band {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.eq-band h4 {
+  margin: 0;
+  font-size: 13px;
+}
+
+.chain-add .input {
+  max-width: 16em;
+}
+
+.chain-add .btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (max-width: 600px) {
+  .param {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+
+  .param > label {
+    grid-column: 1 / -1;
+  }
+
+  .param > select {
+    grid-column: 1 / -1;
+  }
+
+  .effect-meters {
+    display: none;
+  }
+}
+
+/* The same width with or without a unit, so the sliders line up. */
+.param-unit {
+  min-width: 3.2em;
+}

@@ -1,6 +1,10 @@
-//! The microphone: a plain WASAPI capture in shared mode (Jay-C's reserve opens the same mic at the
-//! same time), cleaned by WebRTC's audio processing in 10 ms frames and handed out in 20 ms chunks.
+//! The microphone path (docs/ARQUITETURA.md, section 5): a plain WASAPI capture in shared mode
+//! (Jay-C's reserve opens the same mic at the same time), WebRTC's audio processing, the user's
+//! effect chain and the fixed output limiter, in 10 ms frames; handed out in 20 ms chunks.
 //! Adapted from Jay-C's win.rs (`Mic`, `run_mic`, `list_mics`, `open_mic`).
+//!
+//! The capture thread is the audio thread: after the start it allocates nothing and never waits
+//! on a lock (RNF-3).
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -11,8 +15,10 @@ use serde::{Deserialize, Serialize};
 use wasapi::{AudioCaptureClient, AudioClient, DeviceEnumerator, Direction, Handle, SampleType, StreamMode, WaveFormat, initialize_mta};
 
 use crate::apm::Apm;
+use crate::dsp::chain::{ChainRunner, MAX_SLOTS};
+use crate::dsp::{Meters, output_limiter};
 use crate::monitor::Monitor;
-use crate::{CHUNK_FRAMES, SAMPLE_RATE};
+use crate::{CHUNK_FRAMES, SAMPLE_RATE, level_db};
 
 /// The microphone's cleanup. Echo cancellation isn't here yet: it needs the Jay Link (stage 3),
 /// which brings what Jay-C plays as the echo reference.
@@ -63,11 +69,13 @@ impl Drop for Mic {
 }
 
 impl Mic {
-    /// Opens the mic. `on_chunk` gets each cleaned 20 ms chunk (mono); `on_error` a failure after
-    /// the start (e.g. the mic was unplugged; the capture then ends).
+    /// Opens the mic, running `chain` on it. `on_meters` gets the levels every 20 ms, on the audio
+    /// thread (it must not allocate or wait: e.g. `try_send` to another thread); `on_error` a
+    /// failure after the start (e.g. the mic was unplugged; the capture then ends).
     pub fn start(
         options: MicOptions,
-        on_chunk: impl FnMut(&[f32]) + Send + 'static,
+        chain: ChainRunner,
+        on_meters: impl FnMut(&Meters) + Send + 'static,
         on_error: impl Fn(String) + Send + 'static,
     ) -> Result<Mic, String> {
         let stop = Arc::new(AtomicBool::new(false));
@@ -77,7 +85,7 @@ impl Mic {
             .name("jay-audio-mic".into())
             .spawn({
                 let (stop, monitor) = (stop.clone(), monitor.clone());
-                move || run_mic(options, &stop, &monitor, ready_tx, on_chunk, on_error)
+                move || run_mic(options, chain, &stop, &monitor, ready_tx, on_meters, on_error)
             })
             .map_err(|e| e.to_string())?;
         match ready_rx.recv() {
@@ -150,10 +158,11 @@ fn open_device(device: wasapi::Device) -> Result<OpenMic, String> {
 
 fn run_mic(
     options: MicOptions,
+    mut chain: ChainRunner,
     stop: &AtomicBool,
     monitor: &Mutex<Option<Monitor>>,
     ready: mpsc::Sender<Result<String, String>>,
-    mut on_chunk: impl FnMut(&[f32]),
+    mut on_meters: impl FnMut(&Meters),
     on_error: impl Fn(String),
 ) {
     if let Err(e) = initialize_mta().ok() {
@@ -175,9 +184,14 @@ fn run_mic(
     let _ = ready.send(Ok(name));
 
     let frame = apm.capture_frame_len();
-    let mut raw: VecDeque<u8> = VecDeque::new();
-    let mut pending: Vec<f32> = Vec::new();
-    let mut out: Vec<f32> = Vec::with_capacity(CHUNK_FRAMES * 2);
+    let mut limiter = output_limiter();
+    // Everything the loop needs, allocated now: a second of room in each queue.
+    let mut raw: VecDeque<u8> = VecDeque::with_capacity(SAMPLE_RATE as usize * 4);
+    let mut pending: VecDeque<f32> = VecDeque::with_capacity(SAMPLE_RATE as usize);
+    let mut samples = vec![0.0f32; frame];
+    let mut chunk = [0.0f32; CHUNK_FRAMES];
+    let mut filled = 0;
+    let mut meters = Meters { level: f32::NEG_INFINITY, effects: [(0.0, 0.0); MAX_SLOTS], count: 0 };
 
     while !stop.load(Ordering::SeqCst) {
         if event.wait_for_event(100).is_err() {
@@ -198,20 +212,36 @@ fn run_mic(
                 }
             }
         }
-        let usable = raw.len() / 4 * 4;
-        let bytes: Vec<u8> = raw.drain(..usable).collect();
-        pending.extend(bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])));
+        let mut bytes = raw.drain(..raw.len() / 4 * 4);
+        while let (Some(a), Some(b), Some(c), Some(d)) = (bytes.next(), bytes.next(), bytes.next(), bytes.next()) {
+            pending.push_back(f32::from_le_bytes([a, b, c, d]));
+        }
+        drop(bytes);
 
         while pending.len() >= frame {
-            let mut samples: Vec<f32> = pending.drain(..frame).collect();
+            for (s, p) in samples.iter_mut().zip(pending.drain(..frame)) {
+                *s = p;
+            }
             apm.process_capture(&mut samples, 0);
-            out.extend(samples);
-            if out.len() >= CHUNK_FRAMES {
-                let chunk: Vec<f32> = out.drain(..CHUNK_FRAMES).collect();
-                if let Some(monitor) = monitor.lock().unwrap().as_ref() {
+            chain.process(&mut samples);
+            limiter.process(&mut samples);
+            chunk[filled..filled + frame].copy_from_slice(&samples);
+            filled += frame;
+            if filled == CHUNK_FRAMES {
+                filled = 0;
+                // Never wait for the lock: turning the monitor on (opening a device) holds it a while.
+                if let Ok(monitor) = monitor.try_lock()
+                    && let Some(monitor) = monitor.as_ref()
+                {
                     monitor.push(&chunk);
                 }
-                on_chunk(&chunk);
+                meters.level = level_db(&chunk);
+                meters.count = 0;
+                for (slot, peaks) in meters.effects.iter_mut().zip(chain.meters()) {
+                    *slot = peaks;
+                    meters.count += 1;
+                }
+                on_meters(&meters);
             }
         }
     }

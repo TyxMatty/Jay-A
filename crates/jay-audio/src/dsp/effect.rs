@@ -45,6 +45,11 @@ static EFFECTS: &[EffectInfo] = {
     &[filter::INFO, gate::INFO, eq::INFO, compressor::INFO, deesser::INFO, limiter::INFO]
 };
 
+/// The effects users can pick, in the order the UI offers them.
+pub fn all() -> &'static [EffectInfo] {
+    EFFECTS
+}
+
 pub fn find(kind: &str) -> Option<&'static EffectInfo> {
     EFFECTS.iter().chain(test_effects::EFFECTS).find(|e| e.kind == kind)
 }

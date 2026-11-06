@@ -1,9 +1,11 @@
-// Filters › Microphone (stage 1): pick the mic, set its cleanup, test it with a live meter and hear
-// it. The engine (crates/jay-audio) captures and cleans the audio in Rust; the page only gets its
-// level, 50 times a second. Changing an option during the test reopens the mic with it.
+// Filters: the microphone (stage 1: pick it, set WebRTC's cleanup, test it with a live meter and
+// hear it) and the effect chain (stage 2c, ui/chain-editor.js). The engine (crates/jay-audio)
+// runs the audio in Rust; the page only gets the levels, about 20 times a second. Changing a
+// WebRTC option or the mic during the test reopens the mic with it; chain changes apply live.
 import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import { t } from '../core/i18n.js';
+import { createChainEditor } from './chain-editor.js';
 
 const isTauri = '__TAURI_INTERNALS__' in window;
 const METER_FLOOR = -70;
@@ -11,6 +13,7 @@ const meterPercent = (db) => `${Math.max(0, Math.min(100, ((db - METER_FLOOR) / 
 
 function toggle(key, title, hint) {
   const input = h('input', { type: 'checkbox', role: 'switch', checked: settings.get()[key], onChange: (e) => settings.update({ [key]: e.target.checked }) });
+  settings.subscribe((next) => (input.checked = next[key])); // a preset can change it too
   const row = h('label', { class: 'toggle-row' }, input, h('span', { class: 'toggle-text' }, h('span', { class: 'toggle-title' }, title), h('span', { class: 'hint' }, hint)));
   return { row, input };
 }
@@ -42,14 +45,15 @@ export function createFiltersPanel() {
       gain.row,
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('Level')), meter, h('div', { class: 'row-between' }, status, testButton), message),
       monitor.row,
+      h('p', { class: 'hint' }, t('Echo cancellation arrives with the Jay-C link (stage 3).')),
     ),
-    h('div', { class: 'placeholder-card' }, h('p', {}, t('Echo cancellation arrives with the Jay-C link (stage 3); volume, sensitivity, EQ and presets in stage 2.'))),
   );
 
   let invoke = null;
   let Channel = null;
   let testing = false;
   let channel = null;
+  let chainEditor = null;
 
   const render = () => {
     testButton.textContent = testing ? t('Stop test') : t('Test microphone');
@@ -57,6 +61,7 @@ export function createFiltersPanel() {
     if (!testing) {
       meterFill.style.width = '0';
       status.textContent = '';
+      chainEditor?.setMeters([]);
     }
   };
 
@@ -83,6 +88,7 @@ export function createFiltersPanel() {
       }
       meterFill.style.width = meterPercent(event.level);
       status.textContent = event.level <= -90 ? t('Silence') : `${Math.round(event.level)} dB`;
+      chainEditor?.setMeters(event.effects);
     };
     try {
       const device = await invoke('start_mic', { options: { device: micDevice, noiseSuppression, autoGainControl }, monitor: hear, onEvent: mine });
@@ -111,6 +117,13 @@ export function createFiltersPanel() {
 
   Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event')]).then(([core, event]) => {
     ({ invoke, Channel } = core);
+    // A preset brings its WebRTC settings: they go to the toggles (and reopen a running test).
+    const applyWebrtc = (flags) => {
+      const patch = Object.fromEntries(Object.entries(flags).filter(([, v]) => typeof v === 'boolean'));
+      if (Object.keys(patch).length) settings.update(patch);
+    };
+    chainEditor = createChainEditor({ invoke, applyWebrtc });
+    panel.append(chainEditor.element);
     // The window went to the tray: the engine closed the mic.
     event.listen('mic-stopped', () => {
       channel = null;

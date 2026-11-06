@@ -92,7 +92,7 @@ flowchart LR
 | Por que não ffmpeg | — | Um ffmpeg completo tem ~80–130 MB, e a linha Jay é leve (o Jay-C tem 3,9 MB). E os efeitos dos arquivos seriam filtros do ffmpeg, diferentes dos do microfone: duas implementações. Com o engine próprio, **a mesma cadeia de filtros serve ao vivo e nos arquivos**. |
 | Atalhos globais | `tauri-plugin-global-shortcut` | Tocar o soundboard com um jogo em foco. |
 | Bandeja e instância única | `tray-icon` do Tauri + `tauri-plugin-single-instance` | O Jay-C pode iniciar o Jay-A sem abrir um segundo engine. |
-| Persistência | **`config.json`** na pasta de configuração do app, lido pelo engine | O engine precisa dos filtros mesmo com a janela fechada, então a configuração não pode ficar no `localStorage` da página (como no Jay-C). A UI lê e grava por comandos. Até a etapa 3, as opções do microfone ficam no `localStorage`, porque só a página as usa. |
+| Persistência | **`config.json`** na pasta de configuração do app, lido pelo engine | O engine precisa dos filtros mesmo com a janela fechada, então a configuração não pode ficar no `localStorage` da página (como no Jay-C). A UI lê e grava por comandos. Desde a 2c, a cadeia já fica no motor (`chain.json`, e os presets do usuário em `presets/`); as opções do microfone (dispositivo, supressão de ruído, ganho automático) seguem no `localStorage` até a etapa 3. |
 | Formato interno | 48 kHz, f32, quadros de 10 ms (480 amostras) | É o quadro do APM e do RNNoise. O link entrega blocos de 20 ms, como o microfone nativo do Jay-C hoje. |
 
 ## 3. Estrutura do repositório
@@ -499,7 +499,7 @@ Cada etapa termina com algo testável.
 | 1 ✅ | Engine: microfone WASAPI (modo compartilhado) + APM (copiados do Jay-C), monitor e medidor | o teste de eco do Jay-C passa no `jay-audio`; o medidor mostra a voz; "Ouvir meu microfone" funciona |
 | 2a ✅ | Motor da cadeia: `ParamSpec`, `Effect` com os controles comuns, rack com troca sem lock e crossfade, presets JSON (S6) | testes: valores fora da faixa são clampados; preset com efeito desconhecido carrega com aviso; trocar a ordem 100 vezes durante um seno não estala (RNF-4); a latência somada bate com a informada |
 | 2b ✅ | Efeitos: filtro, gate (com histerese e hold), equalizador, compressor, de-esser e limitador; os 4 presets do app | cada efeito tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz; o gate fecha abaixo do limiar menos a histerese; o limitador nunca passa de −1 dBFS); CPU da cadeia inteira < 2% de um núcleo (RNF-5) |
-| 2c | Aba Filtros: a cadeia (adicionar, reordenar por arraste e por teclado, ligar/desligar), os parâmetros gerados do `ParamSpec`, os medidores por efeito, a latência total e os presets | pelo teclado, montar a cadeia do Voz limpa do zero; o que se ouve no "Ouvir meu microfone" muda na hora |
+| 2c ✅ | Aba Filtros: a cadeia (adicionar, reordenar por arraste e por teclado, ligar/desligar), os parâmetros gerados do `ParamSpec`, os medidores por efeito, a latência total e os presets | pelo teclado, montar a cadeia do Voz limpa do zero; o que se ouve no "Ouvir meu microfone" muda na hora |
 | 3 | Servidor do Jay Link (S1, S2), junto com a I5 do Jay-C | o `jay_a_probe` do Jay-C passa; numa chamada, o outro lado ouve a voz filtrada pelo Jay-A; fechar o Jay-A não corta a voz (a reserva assume); o som de outros apps continua sem abafar (−7,8 dB, spike 09 do Jay-C) |
 | 4 | Soundboard | um clipe tocado por atalho, com um jogo em foco, chega à chamada e aos fones sem voltar como eco |
 | 5 | Conversão (S3) | lote de 10 arquivos mistos para WAV, FLAC, MP3, OGG e Opus; um arquivo corrompido falha sozinho e os outros saem |
@@ -535,6 +535,22 @@ Cada etapa termina com algo testável.
 - **Todos os efeitos:** silêncio, ruído no volume máximo e silêncio de novo, sem NaN nem cauda depois do ruído. Os 4 presets do app carregam sem aviso e rodam.
 - **CPU (RNF-5):** os seis efeitos ligados, com o equalizador mexendo em 5 bandas: **0,49% de um núcleo** do Ryzen 5 5600G (`cargo test --release -- --ignored cpu`). O limite era 2%.
 - Os testes foram conferidos quebrando o código de propósito em 8 pontos (filtro sem velocidade limitada, gate sem histerese, limitador sem atraso, de-esser com a separação antiga, compressor sem a curva, cadeia sem remontar na latência, entre outros): todos falharam com o defeito.
+
+**Etapa 2c, como ficou e o que foi medido (2026-11-06):**
+- **Caminho do microfone:** WASAPI → WebRTC APM → a cadeia do usuário → o limitador fixo (−1 dBFS, 5 ms) → "Ouvir meu microfone" e os medidores. A thread do microfone deixou de alocar memória a cada pacote (o laço herdado do Jay-C alocava) e não espera mais o lock do monitor (`try_lock`).
+- **Medidores:** a thread de áudio entrega os níveis numa fila de tamanho fixo (sem alocar); uma thread à parte junta o mais alto de cada 50 ms e manda à tela (≈ 20 vezes por segundo).
+- **Onde fica a cadeia:** no motor, salva em `chain.json` na pasta de configuração do app (`%APPDATA%\io.github.tyxmatty.jaya`) a cada mudança (o slider salva quando é solto). Presets do usuário em `presets/` ao lado. A cadeia começa vazia.
+- **Tela:** cada efeito é um cartão com alça de arraste, liga/desliga, medidores de entrada e saída, subir, descer, duplicar e remover; ao abrir, os controles saem dos `ParamSpec` (slider em escala log onde é log, campo numérico, voltar ao padrão). O equalizador mostra as 10 bandas. Presets: os do app, salvar como, importar, exportar (vai para Downloads) e apagar.
+- **No app de verdade, pela depuração remota:**
+  - **Só teclado:** a partir da cadeia vazia, a cadeia da Voz limpa foi montada com 189 teclas (Tab, setas, Enter, Ctrl+A e digitação), e o resultado é igual ao preset, sem nenhuma diferença.
+  - **Subir, descer, duplicar e remover pelo teclado:** a ordem muda como esperado, e o foco fica no botão do efeito movido (ou no do vizinho, depois de remover).
+  - **Arrastar com o mouse:** o De-esser foi parar acima do Gate.
+  - **Com o microfone de verdade** ("Microfone (2- ME6S)", −20 dB): os medidores de cada efeito se mexeram, e mudar um parâmetro com o microfone aberto não deu erro.
+  - **Presets:** exportar gravou o `Jay-A.json` em Downloads; importar esse conteúdo trouxe a ordem dele e criou o preset do usuário; salvar como e apagar funcionaram.
+- **Não visto:**
+  - **Ouvir as mudanças:** não ouvi o "Ouvir meu microfone" com a cadeia mudando; o que foi testado é que a cadeia processa o áudio real e que as mudanças entram no próximo quadro (testes da 2a/2b).
+  - **Importar pelo diálogo de arquivo de verdade:** o arquivo injetado pela depuração deu `NotReadableError`; o mesmo conteúdo como arquivo da página funcionou.
+- **Para depois:** o equalizador ocupa 4 linhas por banda; uma linha por banda deixaria o cartão bem mais curto.
 
 ## 13. Decisões em aberto
 

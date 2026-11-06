@@ -66,6 +66,58 @@ impl ChainSpec {
         }
         Ok(())
     }
+
+    /// Samples of delay the chain adds (off the audio thread: creates its effects).
+    pub fn latency(&self) -> usize {
+        self.slots.iter().map(latency_of).sum()
+    }
+
+    fn position(&self, id: &str) -> Result<usize, String> {
+        self.slots.iter().position(|s| s.id == id).ok_or_else(|| format!("no effect {id}"))
+    }
+
+    /// `kind#N` with the lowest N not in use.
+    fn free_id(&self, kind: &str) -> String {
+        (0..).map(|n| format!("{kind}#{n}")).find(|id| self.slots.iter().all(|s| &s.id != id)).expect("ids are endless")
+    }
+
+    /// Adds the effect `kind` at the end, with its defaults. Returns its id.
+    pub fn add(&mut self, kind: &str) -> Result<String, String> {
+        if self.slots.len() == MAX_SLOTS {
+            return Err(format!("a chain holds at most {MAX_SLOTS} effects"));
+        }
+        let slot = SlotSpec::new(self.free_id(kind), kind).ok_or_else(|| format!("no effect {kind}"))?;
+        let id = slot.id.clone();
+        self.slots.push(slot);
+        Ok(id)
+    }
+
+    /// Adds a copy of `id` right after it. Returns the copy's id.
+    pub fn duplicate(&mut self, id: &str) -> Result<String, String> {
+        if self.slots.len() == MAX_SLOTS {
+            return Err(format!("a chain holds at most {MAX_SLOTS} effects"));
+        }
+        let at = self.position(id)?;
+        let mut copy = self.slots[at].clone();
+        copy.id = self.free_id(copy.info.kind);
+        let new_id = copy.id.clone();
+        self.slots.insert(at + 1, copy);
+        Ok(new_id)
+    }
+
+    pub fn remove(&mut self, id: &str) -> Result<(), String> {
+        let at = self.position(id)?;
+        self.slots.remove(at);
+        Ok(())
+    }
+
+    /// Moves `id` to position `to` (0 = first; past the end = last).
+    pub fn move_to(&mut self, id: &str, to: usize) -> Result<(), String> {
+        let at = self.position(id)?;
+        let slot = self.slots.remove(at);
+        self.slots.insert(to.min(self.slots.len()), slot);
+        Ok(())
+    }
 }
 
 /// A value that ramps to its target over one frame.
@@ -467,6 +519,32 @@ mod tests {
         assert_eq!(hits.len(), 1, "one impulse out: {hits:?}");
         assert_eq!(hits[0].0, 144);
         assert!((hits[0].1 - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn editing_a_chain_keeps_ids_unique() {
+        let mut spec = ChainSpec::default();
+        assert_eq!(spec.add("test-gain").unwrap(), "test-gain#0");
+        assert_eq!(spec.add("test-clip").unwrap(), "test-clip#0");
+        assert_eq!(spec.add("test-gain").unwrap(), "test-gain#1");
+        spec.slots[0].values[INPUT_GAIN] = -3.0;
+        assert_eq!(spec.duplicate("test-gain#0").unwrap(), "test-gain#2");
+        let ids = |s: &ChainSpec| s.slots.iter().map(|s| s.id.clone()).collect::<Vec<_>>();
+        assert_eq!(ids(&spec), ["test-gain#0", "test-gain#2", "test-clip#0", "test-gain#1"]);
+        assert_eq!(spec.slots[1].values[INPUT_GAIN], -3.0, "a copy keeps the values");
+        spec.remove("test-gain#0").unwrap();
+        assert_eq!(spec.add("test-gain").unwrap(), "test-gain#0", "a freed id is reused");
+        spec.move_to("test-gain#0", 0).unwrap();
+        spec.move_to("test-clip#0", 99).unwrap();
+        assert_eq!(ids(&spec), ["test-gain#0", "test-gain#2", "test-gain#1", "test-clip#0"]);
+        assert!(spec.validate().is_ok());
+        assert!(spec.add("nope").is_err());
+        assert!(spec.remove("nope").is_err());
+        while spec.slots.len() < MAX_SLOTS {
+            spec.add("test-clip").unwrap();
+        }
+        assert!(spec.add("test-clip").is_err() && spec.duplicate("test-clip#0").is_err(), "full");
+        assert_eq!(chain(&["test-delay", "test-delay"]).latency(), 96);
     }
 
     #[test]

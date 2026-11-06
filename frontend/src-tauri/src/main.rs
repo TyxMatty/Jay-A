@@ -53,7 +53,25 @@ fn main() {
             #[cfg(windows)]
             audio::stop_mic,
             #[cfg(windows)]
-            audio::set_monitor
+            audio::set_monitor,
+            #[cfg(windows)]
+            audio::effects_catalog,
+            #[cfg(windows)]
+            audio::chain_state,
+            #[cfg(windows)]
+            audio::chain_edit,
+            #[cfg(windows)]
+            audio::chain_set_param,
+            #[cfg(windows)]
+            audio::chain_load,
+            #[cfg(windows)]
+            audio::chain_export,
+            #[cfg(windows)]
+            audio::presets_list,
+            #[cfg(windows)]
+            audio::preset_save,
+            #[cfg(windows)]
+            audio::preset_delete
         ])
         .on_window_event(|window, event| {
             // Closing the window keeps Jay-A in the tray, so the filters keep working during calls.
@@ -89,7 +107,10 @@ fn main() {
                 .build(app)?;
             app.manage(TrayItems { open, quit });
             #[cfg(windows)]
-            app.manage(audio::MicState::default());
+            {
+                app.manage(audio::MicState::default());
+                app.manage(audio::ChainState::load(&app.path().app_config_dir()?));
+            }
             // The window starts hidden (tauri.conf.json), so --background never flashes it.
             if !background(&std::env::args().collect::<Vec<_>>()) {
                 show_main(app.handle());

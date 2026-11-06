@@ -13,4 +13,12 @@ export const icons = {
   waveform: svg('<path d="M2 12h2M6 8v8M10 4v16M14 7v10M18 10v4M22 12h-2"/>'),
   /** Convert: two arrows swapping. */
   convert: svg('<path d="M17 3l4 4-4 4M21 7H9M7 21l-4-4 4-4M3 17h12"/>'),
+  // The effect chain (Jay-C's grip, arrows and copy; the rest Lucide-style like them).
+  grip: svg('<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>'),
+  arrowUp: svg('<path d="m18 15-6-6-6 6"/>'),
+  arrowDown: svg('<path d="m6 9 6 6 6-6"/>'),
+  copy: svg('<rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>'),
+  trash: svg('<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>'),
+  reset: svg('<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/>'),
+  plus: svg('<path d="M12 5v14M5 12h14"/>'),
 };

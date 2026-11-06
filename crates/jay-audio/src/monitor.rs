@@ -37,7 +37,8 @@ impl Drop for Monitor {
 
 impl Monitor {
     pub fn start() -> Result<Monitor, String> {
-        let queue = Queue::default();
+        // Room for the most it ever holds, so pushing from the audio thread never allocates.
+        let queue: Queue = Arc::new(Mutex::new(VecDeque::with_capacity(MAX_QUEUED + CHUNK_FRAMES)));
         let stop = Arc::new(AtomicBool::new(false));
         let (ready_tx, ready_rx) = mpsc::channel();
         let thread = std::thread::Builder::new()
@@ -54,9 +55,10 @@ impl Monitor {
         }
     }
 
-    /// Queues a mono chunk to play.
+    /// Queues a mono chunk to play. Called from the audio thread: if the output thread holds the
+    /// queue right now, this chunk is skipped instead of waiting.
     pub fn push(&self, chunk: &[f32]) {
-        let mut queue = self.queue.lock().unwrap();
+        let Ok(mut queue) = self.queue.try_lock() else { return };
         queue.extend(chunk);
         if queue.len() > MAX_QUEUED {
             let excess = queue.len() - START_QUEUED;

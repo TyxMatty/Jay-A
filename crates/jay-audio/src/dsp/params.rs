@@ -2,7 +2,11 @@
 //! the UI or a preset is made valid by `clamp` (the idea of Carla's ParameterRanges,
 //! docs/REFERENCIAS.md 2.3).
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+use serde::Serialize;
+
+/// Serialized for the UI as "linear", "log", "db", "toggle" or { "choice": [labels] }.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Scale {
     Linear,
     /// Frequencies and times: the control moves on a log scale.
@@ -14,7 +18,7 @@ pub enum Scale {
     Choice(&'static [&'static str]),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
 pub struct ParamSpec {
     pub key: &'static str,
     pub min: f32,
