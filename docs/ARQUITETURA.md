@@ -551,6 +551,7 @@ Cada etapa termina com algo testável.
   - **Ouvir as mudanças:** não ouvi o "Ouvir meu microfone" com a cadeia mudando; o que foi testado é que a cadeia processa o áudio real e que as mudanças entram no próximo quadro (testes da 2a/2b).
   - **Importar pelo diálogo de arquivo de verdade:** o arquivo injetado pela depuração deu `NotReadableError`; o mesmo conteúdo como arquivo da página funcionou.
 - **Para depois:** o equalizador ocupa 4 linhas por banda; uma linha por banda deixaria o cartão bem mais curto.
+- **Monitor, ponto aberto:** o teste manual do monitor (`cargo test -- --ignored`) passou a medir só a energia em 440 Hz (Goertzel), para não contar outros sons do PC. Numa segunda rodada, com outro som tocando no PC, o tom saiu a −50,8 dBFS na saída padrão, contra −35,2 na etapa 1, e o teste falhou. Um print temporário mostrou o monitor entregando 480 quadros a cada pedido do dispositivo, com o tom dentro, então a perda acontece depois, no Windows. Não foi confirmado onde: pode ser o Windows baixando o volume dos outros apps durante uma chamada, ou o volume do processo no mixer. Vale repetir com o PC em silêncio e sem chamada aberta.
 
 ## 13. Decisões em aberto
 

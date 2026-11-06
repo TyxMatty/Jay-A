@@ -130,10 +130,24 @@ mod tests {
     use wasapi::{DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat, initialize_mta};
 
     use super::Monitor;
-    use crate::{CHUNK_FRAMES, SAMPLE_RATE, level_db};
+    use crate::{CHUNK_FRAMES, SAMPLE_RATE};
 
-    /// Level (dBFS) of what the default output plays during `duration`, read from its loopback,
-    /// while `during` runs every 20 ms.
+    /// RMS level (dBFS) of the `freq` component of `x` (Goertzel): other sounds playing on the PC
+    /// at the same time don't count.
+    fn tone_db(x: &[f32], freq: f32) -> f32 {
+        let coeff = 2.0 * (2.0 * std::f64::consts::PI * freq as f64 / SAMPLE_RATE as f64).cos();
+        let (mut s1, mut s2) = (0.0f64, 0.0f64);
+        for &v in x {
+            let s = v as f64 + coeff * s1 - s2;
+            s2 = s1;
+            s1 = s;
+        }
+        let amplitude = 2.0 * (s1 * s1 + s2 * s2 - coeff * s1 * s2).max(0.0).sqrt() / x.len() as f64;
+        (20.0 * (amplitude / 2f64.sqrt() + 1e-12).log10()) as f32
+    }
+
+    /// Level (dBFS) of the 440 Hz test tone in what the default output plays during `duration`,
+    /// read from its loopback, while `during` runs every 20 ms.
     fn output_level(duration: Duration, mut during: impl FnMut()) -> f32 {
         initialize_mta().ok().unwrap();
         let device = DeviceEnumerator::new().unwrap().get_default_device(&Direction::Render).unwrap();
@@ -153,7 +167,17 @@ mod tests {
         client.stop_stream().unwrap();
         let bytes: Vec<u8> = raw.into_iter().collect();
         let samples: Vec<f32> = bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
-        level_db(&samples[samples.len() / 2..]) // the second half: past the monitor's start-up
+        tone_db(&samples[samples.len() / 2..], 440.0) // the second half: past the monitor's start-up
+    }
+
+    #[test]
+    fn tone_db_measures_one_frequency_only() {
+        let at = |f: f32, a: f32| (0..48_000).map(move |i| a * (2.0 * std::f32::consts::PI * f * i as f32 / 48_000.0).sin());
+        let tone: Vec<f32> = at(440.0, 0.05).collect();
+        assert!((tone_db(&tone, 440.0) - -29.03).abs() < 0.1, "a -29 dBFS tone: {}", tone_db(&tone, 440.0));
+        let mixed: Vec<f32> = at(440.0, 0.05).zip(at(1000.0, 0.5)).map(|(a, b)| a + b).collect();
+        assert!((tone_db(&mixed, 440.0) - -29.03).abs() < 0.2, "a loud 1 kHz alongside doesn't count");
+        assert!(tone_db(&at(1000.0, 0.5).collect::<Vec<_>>(), 440.0) < -60.0);
     }
 
     #[test]
@@ -170,7 +194,7 @@ mod tests {
             monitor.push(&chunk);
         });
         drop(monitor);
-        println!("default output: {silence:.1} dBFS before, {tone:.1} dBFS with the monitor's tone (-29 dBFS sent)");
+        println!("440 Hz on the default output: {silence:.1} dBFS before, {tone:.1} dBFS with the monitor's tone (-29 dBFS sent)");
         assert!(tone > -40.0 && tone > silence + 15.0, "the tone didn't come out ({silence:.1} -> {tone:.1} dBFS)");
     }
 }
