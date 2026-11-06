@@ -15,8 +15,8 @@ export default {
   "Microphone": "Microfone",
   "Windows default": "Padrão do Windows",
   "Noise suppression": "Supressão de ruído",
-  "Removes steady noise like fans and hiss. Turn it off to play an instrument.":
-    "Tira ruídos constantes, como ventilador e chiado. Desligue pra tocar um instrumento.",
+  "Removes steady noise like fans and hiss. For keyboards, clicks and voices in the background, add \"Noise removal (AI)\" to the effect chain.":
+    "Tira ruídos constantes, como ventilador e chiado. Pra teclado, cliques e vozes ao fundo, adicione \"Remoção de ruído (IA)\" na cadeia de efeitos.",
   "Automatic gain": "Ganho automático",
   "Keeps your voice at a similar volume, near or far from the microphone.":
     "Deixa sua voz num volume parecido, perto ou longe do microfone.",
@@ -34,6 +34,10 @@ export default {
 
   // The effect chain (ui/chain-editor.js)
   "Effect chain": "Cadeia de efeitos",
+  "Noise removal (AI)": "Remoção de ruído (IA)",
+  "Model": "Modelo",
+  "Max reduction": "Redução máxima",
+  "RNNoise (lighter)": "RNNoise (mais leve)",
   "Filter": "Filtro",
   "Gate": "Gate",
   "Equalizer": "Equalizador",

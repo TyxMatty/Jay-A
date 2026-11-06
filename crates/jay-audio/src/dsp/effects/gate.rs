@@ -4,7 +4,7 @@
 //! has the same hold).
 
 use super::{SECOND, coef};
-use crate::dsp::effect::{Effect, EffectInfo};
+use crate::dsp::effect::{Effect, EffectInfo, NO_LATENCY};
 use crate::dsp::params::{ParamSpec, Scale, db_to_gain};
 
 static PARAMS: [ParamSpec; 6] = [
@@ -16,7 +16,7 @@ static PARAMS: [ParamSpec; 6] = [
     ParamSpec { key: "reduction", min: -80.0, max: 0.0, default: -60.0, step: 0.5, scale: Scale::Db, unit: "dB" },
 ];
 
-pub const INFO: EffectInfo = EffectInfo { kind: "gate", params: &PARAMS, create: || Box::new(Gate::new()) };
+pub const INFO: EffectInfo = EffectInfo { kind: "gate", params: &PARAMS, create: || Box::new(Gate::new()), latency: NO_LATENCY };
 
 /// The level detector: mean square over ~5 ms.
 const DETECT_MS: f32 = 5.0;

@@ -46,7 +46,8 @@ flowchart LR
 | RF-F5 | Ver o nível na entrada e na saída de cada efeito, o nível final e a latência total da cadeia | 2 |
 | RF-F6 | Presets: os que vêm com o app, salvar o atual, importar e exportar em JSON | 2 |
 | RF-F7 | "Ouvir meu microfone": a saída da cadeia nos fones | 1 ✅ |
-| RF-F8 | Supressão de ruído forte (RNNoise, DeepFilterNet) e efeitos de voz (tom, robô, reverb) | 7 |
+| RF-F8 | Remoção de ruído por IA (DeepFilterNet, RNNoise) para teclado, cliques e vozes ao fundo | 2d |
+| RF-F9 | Efeitos de voz (tom, robô, reverb) | 7 |
 | RF-L1 | Servir o Jay Link ao Jay-C: `HELLO`, microfone sob pedido, `AUDIO` a cada 20 ms, estado com `deviceId` | 3 |
 | RF-L2 | Abrir só na bandeja com `--background`; instância única | 0 ✅ |
 | RF-S1 | Soundboard: importar clipes, tocar por clique ou atalho global, escolher os destinos (chamada, fones), volume por clipe e parar tudo | 4 |
@@ -58,7 +59,7 @@ flowchart LR
 
 | # | Requisito | Como medir |
 |---|---|---|
-| RNF-1 Latência | A cadeia da etapa 2 soma no máximo **5 ms** (o lookahead do limitador; filtros IIR, gate e compressor não atrasam). Com a supressão forte, até **40 ms**. O link soma no máximo 5 ms no p99 sobre o microfone nativo do Jay-C | a latência que cada efeito informa; a correlação com a reserva do Jay-C (S1) |
+| RNF-1 Latência | A cadeia da etapa 2 soma no máximo **5 ms** (o lookahead do limitador; filtros IIR, gate e compressor não atrasam). Com a remoção de ruído por IA (DeepFilterNet), **45 ms** (40 dela + 5 do limitador); com o RNNoise, 15 ms. O link soma no máximo 5 ms no p99 sobre o microfone nativo do Jay-C | a latência que cada efeito informa; a correlação com a reserva do Jay-C (S1) |
 | RNF-2 Continuidade | Com o microfone ligado, um bloco de `AUDIO` a cada 20 ms, também em silêncio; **nenhum intervalo acima de 60 ms** | `jay_a_probe` do Jay-C por 30 s |
 | RNF-3 Tempo real | A thread de áudio **nunca espera**: não pega lock bloqueante, não aloca memória, não lê disco nem pipe. Mudanças chegam por fila e entram entre quadros (seção 5) | revisão de código; teste que mexe nos parâmetros 1 000 vezes por segundo sem buraco |
 | RNF-4 Sem estalo | Mudar parâmetro, ligar/desligar efeito, reordenar e trocar preset fazem rampa de no máximo 10 ms; nenhum degrau na saída | teste com seno: a maior diferença entre amostras vizinhas não cresce na troca |
@@ -83,7 +84,7 @@ flowchart LR
 | Filtros próprios | Biquad (filtros e EQ), gate, compressor, de-esser e limitador **escritos à mão** em Rust | Cada um tem 30–80 linhas (receitas RBJ para os biquads). Não vale uma dependência, e o código GPL do EasyEffects não pode entrar. |
 | Cadeia de efeitos | **Rack**: uma lista ordenada de instâncias (`gate#0`, `eq#1`) que a pessoa monta, como o EasyEffects e o modo rack do Carla | A ordem certa depende da voz e do microfone; uma ordem fixa não serve a todos. O patchbay (grafo livre) do Carla é poder demais para voz. |
 | Parâmetros | Cada parâmetro tem padrão, mínimo, máximo, passo e escala (linear, logarítmica, dB), e todo valor recebido é clampado, como os `ParameterRanges` do Carla | A UI gera os controles a partir da descrição, e um preset com valor fora da faixa não quebra nada |
-| Supressão de ruído forte | `nnnoiseless` (RNNoise em Rust, BSD) e `libDF` (DeepFilterNet em Rust, MIT/Apache) | As mesmas que o EasyEffects usa, com licenças compatíveis com MIT |
+| Supressão de ruído forte | `nnnoiseless` (RNNoise em Rust, BSD) e `libDF` (DeepFilterNet 3, MIT/Apache) **do repositório oficial** (git, tag `v0.5.6`: o crates.io só tem a 0.2), com o modelo embutido; o DeepFilterNet roda numa **thread própria**, como no plugin LADSPA oficial | As mesmas que o EasyEffects usa, com licenças compatíveis com MIT. A inferência do DeepFilterNet aloca memória e o estado dele não pode trocar de thread; na thread própria, a RNF-3 continua valendo, ao custo de um quadro (10 ms) a mais. Autorizado pelo usuário em 2026-11-06 (roda código de terceiros no build). |
 | Loudness | `ebur128` (MIT) | Normalizar em LUFS no editor e na conversão, como o autogain do EasyEffects (libebur128) |
 | Licença | **MIT** (D6), arquivo `LICENSE` | Igual ao Jay-C |
 | Decodificar | **symphonia** (Rust puro, MPL-2.0) | MP3, AAC/M4A, FLAC, WAV, OGG Vorbis, ALAC, AIFF. Arquivos do usuário são entrada não confiável, e Rust puro evita bugs de memória num decodificador em C. |
@@ -115,12 +116,13 @@ Jay-A/
 │     ├─ dsp/                    # 2a ✅: params.rs (ParamSpec, controles comuns), effect.rs (Effect, lista
 │     │                          # de efeitos), chain.rs (rack, troca sem lock, crossfade), preset.rs (JSON);
 │     │                          # 2b ✅: effects/ biquad, filter, eq, gate, compressor, deesser, limiter;
-│     │                          # 7: denoise, pitch, robot, reverb
+│     │                          # 2d ✅: effects/denoise (DeepFilterNet, RNNoise); 7: pitch, robot, reverb
 │     ├─ presets/                # os presets que vêm com o app (clean-voice, podcast, noise-only, radio)
 │     ├─ soundboard.rs           # biblioteca, vozes, mistura
 │     ├─ files/                  # decode.rs, encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
 │     └─ link.rs                 # servidor do Jay Link
-├─ scripts/                      # dev-debug.ps1 (app com depuração na porta 9224) e cdp-eval.mjs (roda JS no app), do Jay-C
+├─ scripts/                      # dev-debug.ps1 (app com depuração na porta 9224) e cdp-eval.mjs (roda JS no app), do Jay-C;
+│                                # make-speech.ps1 (fala com as vozes do Windows, para avaliar a remoção de ruído)
 └─ frontend/
    ├─ index.html, vite.config.js, package.json
    ├─ src/
@@ -235,7 +237,7 @@ As faixas partem das do EasyEffects (`REFERENCIAS.md`, seção 1.3), ajustadas p
 | **Compressor** | limiar −18 dB [−60..0]; ratio 3 [1..20]; joelho 6 dB [0..24]; attack 10 ms [0,1..200]; release 120 ms [10..2000]; makeup 0 dB [0..24]; detecção RMS ou pico; dry/wet | 0 | 2 |
 | **De-esser** | frequência 6 kHz [3000..12000]; limiar −18 dB [−60..0]; ratio 3 [1..20]; um crossover Linkwitz-Riley de 24 dB/oitava separa os agudos (as duas metades somam de volta a um nível plano), e só eles são comprimidos | 0 | 2 |
 | **Limitador** (fixo no fim; também pode entrar na cadeia) | limiar −1 dBFS [−24..0]; lookahead 5 ms [1..10]; release 50 ms [5..500] | lookahead | 2 |
-| **Supressão de ruído forte** | modelo: RNNoise (`nnnoiseless`) ou DeepFilterNet (`libDF`); RNNoise: VAD com limiar 50% [0..100] e release 200 ms [0..2000]; DeepFilterNet: limite de atenuação 30 dB [0..100]; dry/wet | RNNoise ~10 ms; DeepFilterNet medir (S5) | 7 |
+| **Remoção de ruído (IA)** (`denoise`) | modelo: DeepFilterNet 3 (padrão) ou RNNoise; redução máxima 100 dB [6..100] (100 = sem limite; menos deixa um pouco do ambiente) | DeepFilterNet 40 ms (30 do modelo + 10 da thread própria); RNNoise 10 ms | 2d |
 | **Tom** | semitons 0 [−12..12], cents 0 [−100..100]; dry/wet | medir (S4) | 7 |
 | **Robô** | modulação em anel: frequência 50 Hz [10..500]; dry/wet | 0 | 7 |
 | **Reverb** | tamanho, amortecimento, pré-delay; dry/wet | 0 | 7 |
@@ -476,7 +478,7 @@ O plano e a lista de arquivos são do Jay-C: `docs/JAY-A.md`, seções 6 e 7, co
 | S2 | AEC com a referência aberta por outro processo | o teste de eco do Jay-C repetido com o Jay-A abrindo o loopback do Jay-C; mesma remoção (~33 dB) |
 | S3 | Codificadores com MSVC (`mp3lame-encoder`, `vorbis_rs`, `opus`) e decodificação de Opus | os três compilam no Windows; um WAV vira MP3, OGG e Opus que tocam no navegador |
 | S4 | Tom/tempo ao vivo (ex.: `signalsmith-stretch`, MIT; o EasyEffects usa o SoundTouch, LGPL) | latência e CPU medidas com voz real |
-| S5 | DeepFilterNet (`libDF`, Rust) ao vivo a 48 kHz mono | latência e CPU medidas; tamanho do modelo no instalador (RNF-12) |
+| S5 ✅ | DeepFilterNet (`libDF`, Rust) ao vivo a 48 kHz mono | medido na 2d: 1 a 2 ms por bloco de 10 ms (p99 de 2 a 6 ms) com a máquina quieta; latência de 40 ms, conferida por correlação com a fala. **Não medido:** o tamanho do instalador (RNF-12) |
 | S6 | Troca de cadeia sem estalo (crossfade de 10 ms) e parâmetros mudando 1 000 vezes por segundo | o teste com seno do RNF-4 passa; nenhum quadro atrasa |
 
 Riscos:
@@ -500,11 +502,12 @@ Cada etapa termina com algo testável.
 | 2a ✅ | Motor da cadeia: `ParamSpec`, `Effect` com os controles comuns, rack com troca sem lock e crossfade, presets JSON (S6) | testes: valores fora da faixa são clampados; preset com efeito desconhecido carrega com aviso; trocar a ordem 100 vezes durante um seno não estala (RNF-4); a latência somada bate com a informada |
 | 2b ✅ | Efeitos: filtro, gate (com histerese e hold), equalizador, compressor, de-esser e limitador; os 4 presets do app | cada efeito tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz; o gate fecha abaixo do limiar menos a histerese; o limitador nunca passa de −1 dBFS); CPU da cadeia inteira < 2% de um núcleo (RNF-5) |
 | 2c ✅ | Aba Filtros: a cadeia (adicionar, reordenar por arraste e por teclado, ligar/desligar), os parâmetros gerados do `ParamSpec`, os medidores por efeito, a latência total e os presets | pelo teclado, montar a cadeia do Voz limpa do zero; o que se ouve no "Ouvir meu microfone" muda na hora |
+| 2d ✅ | Remoção de ruído por IA (DeepFilterNet 3 e RNNoise), trazida da etapa 7 porque a supressão do WebRTC deixava passar teclado, cliques e vozes ao fundo (relato do usuário) (S5) | o efeito entra na cadeia como os outros; DeepFilterNet numa thread própria, sem alocar na thread de áudio; avaliação com fala medida (abaixo) |
 | 3 | Servidor do Jay Link (S1, S2), junto com a I5 do Jay-C | o `jay_a_probe` do Jay-C passa; numa chamada, o outro lado ouve a voz filtrada pelo Jay-A; fechar o Jay-A não corta a voz (a reserva assume); o som de outros apps continua sem abafar (−7,8 dB, spike 09 do Jay-C) |
 | 4 | Soundboard | um clipe tocado por atalho, com um jogo em foco, chega à chamada e aos fones sem voltar como eco |
 | 5 | Conversão (S3) | lote de 10 arquivos mistos para WAV, FLAC, MP3, OGG e Opus; um arquivo corrompido falha sozinho e os outros saem |
 | 6 | Editor | cortar, fade, normalizar e exportar; desfazer volta ao estado anterior; a prévia toca no monitor |
-| 7 | Supressão de ruído forte (RNNoise e DeepFilterNet) e efeitos de voz (tom, robô, reverb) (S4, S5) | cada efeito entra na cadeia como os da etapa 2; latência e CPU medidas (meta: ≤ 40 ms somando tudo) |
+| 7 | Efeitos de voz (tom, robô, reverb) (S4) | cada efeito entra na cadeia como os da etapa 2; latência e CPU medidas |
 | 8 | Soundboard dentro do Jay-C | o botão na barra da chamada lista e toca os clipes do Jay-A |
 | 9 | Release: instalador NSIS do Jay-A em `%LOCALAPPDATA%\Jay-A`; o Jay-C oferece o Jay-A | os dois instalados numa máquina limpa fazem uma chamada filtrada; o Jay-C sozinho continua funcionando com o filtro dele |
 
@@ -551,6 +554,33 @@ Cada etapa termina com algo testável.
   - **Ouvir as mudanças:** não ouvi o "Ouvir meu microfone" com a cadeia mudando; o que foi testado é que a cadeia processa o áudio real e que as mudanças entram no próximo quadro (testes da 2a/2b).
   - **Importar pelo diálogo de arquivo de verdade:** o arquivo injetado pela depuração deu `NotReadableError`; o mesmo conteúdo como arquivo da página funcionou.
 - **Para depois:** o equalizador ocupa 4 linhas por banda; uma linha por banda deixaria o cartão bem mais curto.
+**Etapa 2d, medido (2026-11-06):**
+- **Por quê:** testando com a voz, o usuário relatou que quase todo ruído continuava audível: gente falando atrás, mouse, teclado. A supressão do WebRTC é feita para ruído constante.
+- **Avaliação** (`cargo test --release -- --ignored denoise_evaluation`, com a fala gerada pelo `scripts/make-speech.ps1`):
+  - **Montagem:** 12 s de fala da voz Maria (pt-BR) misturada com cada ruído 5 dB abaixo dela. Teclado e mouse são cliques sintéticos; a "voz atrás" é a voz Zira, em inglês.
+  - **SI-SDR:** o quanto a saída se parece com a fala limpa (maior é melhor; a mistura de entrada começa em ~5 dB).
+  - **"Ruído na pausa":** quanto o ruído caiu quando ninguém fala.
+  - **Sem o primeiro segundo:** ele fica fora da medida, porque é a partida dos modelos.
+
+| Ruído | WebRTC (SI-SDR / pausa) | RNNoise | DeepFilterNet |
+|---|---|---|---|
+| Teclado | 3,1 dB / −3,4 dB | 11,1 / −11,0 | 9,3 / **−63,6** |
+| Mouse | 2,9 / −2,2 | 9,9 / −12,7 | 6,7 / **−52,5** |
+| Ventilador | 3,9 / −20,0 | 8,4 / −27,7 | 11,6 / **silêncio total** |
+| Voz atrás | 2,2 / −3,1 | 4,5 / −0,4 | 4,5 / −3,3 |
+
+- **Leitura:**
+  - **Pausas:** o DeepFilterNet praticamente apaga teclado, mouse e ventilador; o RNNoise tira de 11 a 28 dB.
+  - **Durante a fala:** os dois ficam parecidos.
+  - **WebRTC:** a supressão dele **piora** a voz com ruídos que vêm e vão (SI-SDR abaixo da entrada); por isso os presets com a remoção por IA a desligam.
+  - **Voz ao fundo:** nenhum modelo aberto resolve uma segunda pessoa falando. O "corte de vozes de fundo" do Krisp é fechado.
+- **Latência medida** (correlação com a fala): WebRTC 7 ms, RNNoise 10 ms, DeepFilterNet 40 ms. Os dois últimos batem com o que o efeito declara.
+- **Tempo real:** o DeepFilterNet roda numa thread própria, e a thread de áudio não alocou nada (teste). Com a máquina quieta, a inferência leva 1 a 2 ms por bloco e nenhum resultado atrasou depois da partida. Com o `npm run dev` recompilando ao lado, a inferência chegou a picos de 130 ms e muitos blocos saíram sem filtro: num PC muito carregado (um jogo pesado, por exemplo), o filtro pode falhar em trechos. Um quadro a mais de folga reduziria isso, ao custo de mais 10 ms.
+- **No app:** com o "Microfone (4- ME6S)", o medidor de entrada da remoção de ruído marcou 28% (o ruído da sala) e o de saída 0%. A cadeia do "Voz limpa" mostrou 45,0 ms de latência.
+- **Presets:** os quatro do app começam pela remoção de ruído (DeepFilterNet) e desligam a supressão do WebRTC. O "Só ruído" é só ela.
+- **Não visto:**
+  - **Tamanho do instalador:** não medido; o modelo tem 8 MB.
+  - **Qualidade com uma voz de verdade:** a avaliação usa voz sintética e cliques sintéticos; o veredito é o seu ouvido.
 - **Monitor, ponto aberto:** o teste manual do monitor (`cargo test -- --ignored`) passou a medir só a energia em 440 Hz (Goertzel), para não contar outros sons do PC. Numa segunda rodada, com outro som tocando no PC, o tom saiu a −50,8 dBFS na saída padrão, contra −35,2 na etapa 1, e o teste falhou. Um print temporário mostrou o monitor entregando 480 quadros a cada pedido do dispositivo, com o tom dentro, então a perda acontece depois, no Windows. Não foi confirmado onde: pode ser o Windows baixando o volume dos outros apps durante uma chamada, ou o volume do processo no mixer. Vale repetir com o PC em silêncio e sem chamada aberta.
 
 ## 13. Decisões em aberto

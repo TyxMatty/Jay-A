@@ -14,7 +14,12 @@ static PARAMS: [ParamSpec; 3] = [
     ParamSpec { key: "release", min: 5.0, max: 500.0, default: 50.0, step: 1.0, scale: Scale::Log, unit: "ms" },
 ];
 
-pub const INFO: EffectInfo = EffectInfo { kind: "limiter", params: &PARAMS, create: || Box::new(Limiter::new()) };
+pub const INFO: EffectInfo = EffectInfo { kind: "limiter", params: &PARAMS, create: || Box::new(Limiter::new()), latency: |v| lookahead(v[1]) };
+
+/// The lookahead in samples (= the latency) for `ms`.
+fn lookahead(ms: f32) -> usize {
+    ((ms / 1000.0 * SECOND).round() as usize).clamp(1, MAX)
+}
 
 /// The longest lookahead (10 ms); buffers are this big from the start, so a new lookahead never
 /// allocates.
@@ -69,7 +74,7 @@ impl Effect for Limiter {
         match index {
             0 => self.ceiling = db_to_gain(value),
             1 => {
-                let lookahead = ((value / 1000.0 * SECOND).round() as usize).clamp(1, MAX);
+                let lookahead = lookahead(value);
                 if lookahead != self.lookahead {
                     // Changes the latency, so the chain is rebuilt around a fresh limiter.
                     self.lookahead = lookahead;

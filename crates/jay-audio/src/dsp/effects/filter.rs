@@ -2,7 +2,7 @@
 //! 24 dB/octave (two stages in series).
 
 use super::biquad::{Biquad, Shape};
-use crate::dsp::effect::{Effect, EffectInfo};
+use crate::dsp::effect::{Effect, EffectInfo, NO_LATENCY};
 use crate::dsp::params::{ParamSpec, Scale};
 
 pub const TYPES: &[&str] = &["highpass", "lowpass", "lowshelf", "highshelf", "bell", "notch"];
@@ -17,7 +17,7 @@ static PARAMS: [ParamSpec; 5] = [
     ParamSpec { key: "slope", min: 0.0, max: 1.0, default: 0.0, step: 1.0, scale: Scale::Choice(SLOPES), unit: "dB/oct" },
 ];
 
-pub const INFO: EffectInfo = EffectInfo { kind: "filter", params: &PARAMS, create: || Box::new(Filter::new()) };
+pub const INFO: EffectInfo = EffectInfo { kind: "filter", params: &PARAMS, create: || Box::new(Filter::new()), latency: NO_LATENCY };
 
 struct Filter {
     values: [f32; 5],

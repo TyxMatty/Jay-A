@@ -162,6 +162,7 @@ impl Slot {
             effect.set_param(i, *value);
         }
         effect.reset();
+        debug_assert_eq!(effect.latency(), latency_of(spec), "{}: EffectInfo::latency disagrees with the effect", spec.info.kind);
         let v = &spec.values;
         Slot {
             delay: vec![0.0; effect.latency()],
@@ -221,13 +222,9 @@ impl Slot {
     }
 }
 
-/// The latency the effect would have with these values (off the audio thread: creates one).
+/// The latency the effect will have with these values (without creating it).
 fn latency_of(spec: &SlotSpec) -> usize {
-    let mut effect = (spec.info.create)();
-    for (i, value) in spec.values[COMMON.len()..].iter().enumerate() {
-        effect.set_param(i, *value);
-    }
-    effect.latency()
+    (spec.info.latency)(&spec.values[COMMON.len()..])
 }
 
 /// Delays `samples` in place through the ring `line` (nothing when it's empty).

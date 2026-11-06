@@ -26,7 +26,11 @@ export function createFiltersPanel() {
   }
 
   const micSelect = h('select', { class: 'input', id: 'filters-mic', onChange: (e) => settings.update({ micDevice: e.target.value || null }) });
-  const noise = toggle('noiseSuppression', t('Noise suppression'), t('Removes steady noise like fans and hiss. Turn it off to play an instrument.'));
+  const noise = toggle(
+    'noiseSuppression',
+    t('Noise suppression'),
+    t('Removes steady noise like fans and hiss. For keyboards, clicks and voices in the background, add "Noise removal (AI)" to the effect chain.'),
+  );
   const gain = toggle('autoGainControl', t('Automatic gain'), t('Keeps your voice at a similar volume, near or far from the microphone.'));
   const monitor = toggle('monitor', t('Hear my microphone'), t('Use headphones: on speakers, the microphone picks itself up again and howls.'));
   const meterFill = h('div', { class: 'mic-meter-fill' });

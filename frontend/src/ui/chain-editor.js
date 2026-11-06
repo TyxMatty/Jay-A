@@ -13,7 +13,15 @@ const METER_FLOOR = -60;
 const MAX_PRESET_BYTES = 256 * 1024;
 
 const effectName = (kind) =>
-  ({ filter: t('Filter'), gate: t('Gate'), eq: t('Equalizer'), compressor: t('Compressor'), deesser: t('De-esser'), limiter: t('Limiter') })[kind] ?? kind;
+  ({
+    denoise: t('Noise removal (AI)'),
+    filter: t('Filter'),
+    gate: t('Gate'),
+    eq: t('Equalizer'),
+    compressor: t('Compressor'),
+    deesser: t('De-esser'),
+    limiter: t('Limiter'),
+  })[kind] ?? kind;
 
 const paramLabel = (key) =>
   ({
@@ -38,6 +46,8 @@ const paramLabel = (key) =>
     detection: t('Detection'),
     ceiling: t('Ceiling'),
     lookahead: t('Lookahead'),
+    model: t('Model'),
+    limit: t('Max reduction'),
   })[key] ?? key;
 
 const choiceLabel = (label) =>
@@ -51,6 +61,8 @@ const choiceLabel = (label) =>
     off: t('Off'),
     rms: 'RMS',
     peak: t('Peak'),
+    deepfilternet: 'DeepFilterNet',
+    rnnoise: t('RNNoise (lighter)'),
     12: '12 dB/oct',
     24: '24 dB/oct',
   })[label] ?? label;

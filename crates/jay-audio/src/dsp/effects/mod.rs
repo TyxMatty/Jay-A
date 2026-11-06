@@ -5,6 +5,7 @@
 pub mod biquad;
 pub mod compressor;
 pub mod deesser;
+pub mod denoise;
 pub mod eq;
 pub mod filter;
 pub mod gate;

@@ -2,7 +2,7 @@
 //! By default 5 flat bells (100, 300, 1k, 3k, 8k Hz) and 5 bands off.
 
 use super::biquad::{Biquad, Shape};
-use crate::dsp::effect::{Effect, EffectInfo};
+use crate::dsp::effect::{Effect, EffectInfo, NO_LATENCY};
 use crate::dsp::params::{ParamSpec, Scale};
 
 pub const BANDS: usize = 10;
@@ -27,7 +27,7 @@ static PARAMS: [ParamSpec; BANDS * 4] = bands!(
     5 0.0 1000.0, 6 0.0 1000.0, 7 0.0 1000.0, 8 0.0 1000.0, 9 0.0 1000.0
 );
 
-pub const INFO: EffectInfo = EffectInfo { kind: "eq", params: &PARAMS, create: || Box::new(Equalizer::new()) };
+pub const INFO: EffectInfo = EffectInfo { kind: "eq", params: &PARAMS, create: || Box::new(Equalizer::new()), latency: NO_LATENCY };
 
 struct Equalizer {
     values: [f32; BANDS * 4],

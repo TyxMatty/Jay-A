@@ -2,7 +2,17 @@
   "format": "jay-a-preset",
   "version": 1,
   "name": "Noise only",
-  "chain": [],
-  "effects": {},
-  "webrtc": { "noiseSuppression": true, "autoGainControl": true }
+  "chain": [
+    "denoise#0"
+  ],
+  "effects": {
+    "denoise#0": {
+      "model": "deepfilternet",
+      "limit": 100
+    }
+  },
+  "webrtc": {
+    "noiseSuppression": false,
+    "autoGainControl": true
+  }
 }

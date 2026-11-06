@@ -3,7 +3,7 @@
 //! Reiss, JAES 2012), attack and release on the gain reduction, and makeup gain.
 
 use super::{coef, ramp};
-use crate::dsp::effect::{Effect, EffectInfo};
+use crate::dsp::effect::{Effect, EffectInfo, NO_LATENCY};
 use crate::dsp::params::{ParamSpec, Scale};
 
 const DETECTION: &[&str] = &["rms", "peak"];
@@ -18,7 +18,7 @@ static PARAMS: [ParamSpec; 7] = [
     ParamSpec { key: "detection", min: 0.0, max: 1.0, default: 0.0, step: 1.0, scale: Scale::Choice(DETECTION), unit: "" },
 ];
 
-pub const INFO: EffectInfo = EffectInfo { kind: "compressor", params: &PARAMS, create: || Box::new(Compressor::new()) };
+pub const INFO: EffectInfo = EffectInfo { kind: "compressor", params: &PARAMS, create: || Box::new(Compressor::new()), latency: NO_LATENCY };
 
 /// The RMS detector's window: ~10 ms.
 const RMS_MS: f32 = 10.0;

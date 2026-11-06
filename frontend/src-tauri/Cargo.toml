@@ -23,3 +23,11 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+# The dependencies (jay-audio, and the neural network of its noise removal) run audio in real
+# time: optimized for speed, also in `npm run dev`, where unoptimized they can't keep up.
+[profile.release.package."*"]
+opt-level = 3
+
+[profile.dev.package."*"]
+opt-level = 3

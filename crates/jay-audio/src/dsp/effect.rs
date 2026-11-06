@@ -25,7 +25,13 @@ pub struct EffectInfo {
     pub kind: &'static str,
     pub params: &'static [ParamSpec],
     pub create: fn() -> Box<dyn Effect>,
+    /// The latency the effect will have with these values of its params, without creating it
+    /// (creating some, like a neural network, is slow). Must match `Effect::latency`.
+    pub latency: fn(&[f32]) -> usize,
 }
+
+/// For effects that never add latency.
+pub const NO_LATENCY: fn(&[f32]) -> usize = |_| 0;
 
 impl PartialEq for EffectInfo {
     fn eq(&self, other: &Self) -> bool {
@@ -41,8 +47,8 @@ impl std::fmt::Debug for EffectInfo {
 
 /// The effects users can pick, in the order the UI offers them.
 static EFFECTS: &[EffectInfo] = {
-    use super::effects::{compressor, deesser, eq, filter, gate, limiter};
-    &[filter::INFO, gate::INFO, eq::INFO, compressor::INFO, deesser::INFO, limiter::INFO]
+    use super::effects::{compressor, deesser, denoise, eq, filter, gate, limiter};
+    &[denoise::INFO, filter::INFO, gate::INFO, eq::INFO, compressor::INFO, deesser::INFO, limiter::INFO]
 };
 
 /// The effects users can pick, in the order the UI offers them.
@@ -63,14 +69,14 @@ mod test_effects {
 /// (so the order of effects changes the sound) and a pure delay (latency).
 #[cfg(test)]
 pub(crate) mod test_effects {
-    use super::{Effect, EffectInfo};
+    use super::{Effect, EffectInfo, NO_LATENCY};
     use crate::dsp::lerp;
     use crate::dsp::params::{ParamSpec, Scale, db_to_gain};
 
     pub static EFFECTS: &[EffectInfo] = &[
-        EffectInfo { kind: "test-gain", params: &GAIN, create: || Box::new(Gain { from: 1.0, to: 1.0 }) },
-        EffectInfo { kind: "test-clip", params: &CLIP, create: || Box::new(Clip(0.3)) },
-        EffectInfo { kind: "test-delay", params: &DELAY, create: || Box::new(Delay { line: Vec::new(), pos: 0 }) },
+        EffectInfo { kind: "test-gain", params: &GAIN, create: || Box::new(Gain { from: 1.0, to: 1.0 }), latency: NO_LATENCY },
+        EffectInfo { kind: "test-clip", params: &CLIP, create: || Box::new(Clip(0.3)), latency: NO_LATENCY },
+        EffectInfo { kind: "test-delay", params: &DELAY, create: || Box::new(Delay { line: Vec::new(), pos: 0 }), latency: |v| v[0] as usize },
     ];
 
     static GAIN: [ParamSpec; 1] = [ParamSpec { key: "gain", min: -24.0, max: 24.0, default: 0.0, step: 0.1, scale: Scale::Db, unit: "dB" }];

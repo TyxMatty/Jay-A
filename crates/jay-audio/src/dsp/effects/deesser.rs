@@ -7,7 +7,7 @@ use super::biquad::{Biquad, Shape};
 use super::coef;
 use super::compressor::curve;
 use crate::dsp::FRAME;
-use crate::dsp::effect::{Effect, EffectInfo};
+use crate::dsp::effect::{Effect, EffectInfo, NO_LATENCY};
 use crate::dsp::params::{ParamSpec, Scale};
 
 static PARAMS: [ParamSpec; 3] = [
@@ -16,7 +16,7 @@ static PARAMS: [ParamSpec; 3] = [
     ParamSpec { key: "ratio", min: 1.0, max: 20.0, default: 3.0, step: 0.1, scale: Scale::Log, unit: ":1" },
 ];
 
-pub const INFO: EffectInfo = EffectInfo { kind: "deesser", params: &PARAMS, create: || Box::new(DeEsser::new()) };
+pub const INFO: EffectInfo = EffectInfo { kind: "deesser", params: &PARAMS, create: || Box::new(DeEsser::new()), latency: NO_LATENCY };
 
 const ATTACK_MS: f32 = 1.0;
 const RELEASE_MS: f32 = 50.0;

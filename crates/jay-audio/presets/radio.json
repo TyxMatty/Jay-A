@@ -2,12 +2,42 @@
   "format": "jay-a-preset",
   "version": 1,
   "name": "Radio",
-  "chain": ["filter#0", "filter#1", "eq#0", "compressor#0"],
+  "chain": [
+    "denoise#0",
+    "filter#0",
+    "filter#1",
+    "eq#0",
+    "compressor#0"
+  ],
   "effects": {
-    "filter#0": { "type": "highpass", "frequency": 300, "slope": "24" },
-    "filter#1": { "type": "lowpass", "frequency": 3400, "slope": "24" },
-    "eq#0": { "band2Gain": 4, "band2Q": 0.7 },
-    "compressor#0": { "threshold": -30, "ratio": 8, "attack": 2, "release": 80, "makeup": 10 }
+    "denoise#0": {
+      "model": "deepfilternet",
+      "limit": 100
+    },
+    "filter#0": {
+      "type": "highpass",
+      "frequency": 300,
+      "slope": "24"
+    },
+    "filter#1": {
+      "type": "lowpass",
+      "frequency": 3400,
+      "slope": "24"
+    },
+    "eq#0": {
+      "band2Gain": 4,
+      "band2Q": 0.7
+    },
+    "compressor#0": {
+      "threshold": -30,
+      "ratio": 8,
+      "attack": 2,
+      "release": 80,
+      "makeup": 10
+    }
   },
-  "webrtc": { "noiseSuppression": true, "autoGainControl": false }
+  "webrtc": {
+    "noiseSuppression": false,
+    "autoGainControl": false
+  }
 }
