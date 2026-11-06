@@ -137,6 +137,17 @@ flowchart LR
 - **Ouvir meu microfone:** manda a saída da cadeia para os fones, para ajustar os filtros. Só com fones: nos alto-falantes, vira microfonia (aviso na UI).
 - **Supressão de ruído forte (opcional, etapa 7):** RNNoise pelo crate `nnnoiseless` (Rust puro, BSD), também em quadros de 480 amostras.
 
+### Referências (estudar antes das etapas 2 e 7)
+
+Pedido do usuário: aprender com filtros open-source antes de escrever os do Jay-A.
+
+| Projeto | Licença | O que estudar | Como usar no Jay-A |
+|---|---|---|---|
+| [EasyEffects](https://github.com/wwmm/easyeffects) (Linux, PipeWire) | GPL-3.0 | A lista de efeitos (gate, expander, compressor, limitador, de-esser, equalizador, filtros, loudness, pitch shift, reverb, redução de ruído), a **ordem dos efeitos escolhida pelo usuário**, os presets e as faixas de parâmetros de cada efeito | Ideias, faixas e ordem; **sem copiar código**. As bibliotecas que ele usa têm versões que servem: RNNoise → `nnnoiseless` (BSD, já no plano), DeepFilterNet (MIT/Apache, feito em Rust) para a supressão forte, libebur128 → `ebur128` (MIT) para loudness em LUFS no editor e na conversão |
+| [Carla](https://github.com/falkTX/Carla) | GPL-2.0 ou posterior | Como um host carrega plugins LV2, VST2, VST3 e AU, em modo "rack" (em série) ou "patchbay" (grafo), e expõe os parâmetros deles | Referência para uma decisão futura: aceitar plugins VST3/CLAP na cadeia (D7) |
+
+Se o Jay-A for GPL (D6), o código desses projetos poderia ser aproveitado. Mantendo MIT, como o Jay-C, só as ideias.
+
 **Threads do engine:**
 
 | Thread | Faz | Nunca |
@@ -325,7 +336,7 @@ Cada etapa termina com algo testável.
 |---|---|---|
 | 0 ✅ | Scaffold: Tauri v2 + Vite + Vanilla JS, ícones e estilos do Jay-C, bandeja, instância única, `--background` | `npm run dev` abre o Jay-A nos 3 estilos; fechar a janela deixa o ícone na bandeja |
 | 1 ✅ | Engine: microfone WASAPI (modo compartilhado) + APM (copiados do Jay-C), monitor e medidor | o teste de eco do Jay-C passa no `jay-audio`; o medidor mostra a voz; "Ouvir meu microfone" funciona |
-| 2 | Cadeia de filtros, presets e a aba Filtros | cada bloco tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz); trocar preset ao vivo sem estalo |
+| 2 | Cadeia de filtros, presets e a aba Filtros (estudar o EasyEffects antes, seção 5) | cada bloco tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz); trocar preset ao vivo sem estalo |
 | 3 | Servidor do Jay Link (S1, S2), junto com a I5 do Jay-C | o `jay_a_probe` do Jay-C passa; numa chamada, o outro lado ouve a voz filtrada pelo Jay-A; fechar o Jay-A não corta a voz (a reserva assume); o som de outros apps continua sem abafar (−7,8 dB, spike 09 do Jay-C) |
 | 4 | Soundboard | um clipe tocado por atalho, com um jogo em foco, chega à chamada e aos fones sem voltar como eco |
 | 5 | Conversão (S3) | lote de 10 arquivos mistos para WAV, FLAC, MP3, OGG e Opus; um arquivo corrompido falha sozinho e os outros saem |
@@ -349,3 +360,5 @@ Cada etapa termina com algo testável.
 | D3 | "Modificação de áudio" | assumido: editor de arquivos (etapa 6) **e** efeitos de voz ao vivo (etapa 7). Confirmar se os dois são desejados |
 | D4 | Microfone virtual para outros apps (Discord, OBS) | fora do escopo: exige um driver de áudio assinado. Alternativa sem driver: o usuário instala o VB-Cable e o Jay-A toca nele |
 | D5 | Versão em inglês desta documentação | depois, como o `ARQUITETURA.en.md` do Jay-C |
+| D6 | Licença do Jay-A (ainda não tem) | **MIT**, como o Jay-C: dá para estudar o EasyEffects e o Carla, mas não copiar o código deles · GPL-3.0: o código deles pode entrar, mas o Jay-A inteiro (e quem o redistribuir) fica GPL |
+| D7 | Plugins de terceiros (VST3/CLAP) na cadeia de filtros, como o Carla faz | fora do v1: exige um host de plugins (janela de edição, estado, travamentos de plugin). Reavaliar depois da etapa 7 |
