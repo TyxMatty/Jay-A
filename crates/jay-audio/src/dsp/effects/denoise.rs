@@ -57,6 +57,9 @@ fn dfn_params() -> DfParams {
 
 type Frame = [f32; FRAME];
 
+// Big on purpose: the queue holds whole frames in slots allocated once, so the audio thread
+// never allocates; boxing the frame (clippy's advice) would allocate on every one.
+#[allow(clippy::large_enum_variant)]
 enum Job {
     /// A frame and its number.
     Frame(u64, Frame),
@@ -328,7 +331,7 @@ mod tests {
             let size = u32::from_le_bytes(bytes[at + 4..at + 8].try_into().unwrap()) as usize;
             if &bytes[at..at + 4] == b"data" {
                 let data = &bytes[at + 8..(at + 8 + size).min(bytes.len())];
-                return data.chunks_exact(2).map(|b| i16::from_le_bytes([b[0], b[1]]) as f32 / 32768.0).collect();
+                return data.as_chunks::<2>().0.iter().map(|b| i16::from_le_bytes(*b) as f32 / 32768.0).collect();
             }
             at += 8 + size + size % 2;
         }
@@ -443,7 +446,7 @@ mod tests {
             {
                 let mut apm = crate::apm::Apm::new(48_000, 1, 1, false, true, false).unwrap();
                 let mut out = mix.clone();
-                for frame in out.chunks_exact_mut(FRAME) {
+                for frame in out.as_chunks_mut::<FRAME>().0 {
                     apm.process_capture(frame, 0);
                 }
                 results.push(("WebRTC", out));
