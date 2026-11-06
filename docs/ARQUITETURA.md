@@ -2,7 +2,7 @@
 
 App de áudio da linha Jay: **filtros do microfone** (uma opção no Jay-C, no lugar do filtro dele, como o Krisp no Discord), **edição de áudio**, **soundboard** e **conversão de formatos**. Windows primeiro, como o áudio nativo do Jay-C.
 
-Escrito em 2026-11-06, a partir do Jay-C 0.4.0 (`b30199a`). O lado do Jay-C da integração está no `docs/JAY-A.md` do repositório JayC (commit `ff5622f`). Só a etapa 0 foi implementada; o que depende de medição está marcado como spike.
+Escrito em 2026-11-06, a partir do Jay-C 0.4.0 (`b30199a`). O lado do Jay-C da integração está no `docs/JAY-A.md` do repositório JayC. As etapas 0 e 1 estão prontas; o que depende de medição está marcado como spike. O estudo do EasyEffects e do Carla, que embasa a cadeia de efeitos (seção 5), está em [`REFERENCIAS.md`](REFERENCIAS.md). Licença: **MIT** (D6).
 
 ## 1. Visão geral
 
@@ -35,6 +35,42 @@ flowchart LR
 | Alto-falante da chamada, mudo, ensurdecer | Jay-C | Jay-C (sem mudança) |
 | Microfone no Android | `getUserMedia` | sem mudança (o Jay-A é só Windows) |
 
+### Requisitos funcionais
+
+| # | Requisito | Etapa |
+|---|---|---|
+| RF-F1 | Escolher o microfone (lista do Windows ou o padrão) e testá-lo com um medidor | 1 ✅ |
+| RF-F2 | Ligar e desligar o processamento do WebRTC: supressão de ruído e ganho automático (o cancelamento de eco liga com o Jay Link) | 1 ✅ / 3 |
+| RF-F3 | Montar a **cadeia de efeitos**: adicionar, remover, duplicar e **reordenar** efeitos, e ligar ou desligar cada um sem tirá-lo da cadeia | 2 |
+| RF-F4 | Ajustar cada parâmetro dentro da faixa dele (slider, valor digitado e "voltar ao padrão"), com efeito no próximo quadro e sem estalo | 2 |
+| RF-F5 | Ver o nível na entrada e na saída de cada efeito, o nível final e a latência total da cadeia | 2 |
+| RF-F6 | Presets: os que vêm com o app, salvar o atual, importar e exportar em JSON | 2 |
+| RF-F7 | "Ouvir meu microfone": a saída da cadeia nos fones | 1 ✅ |
+| RF-F8 | Supressão de ruído forte (RNNoise, DeepFilterNet) e efeitos de voz (tom, robô, reverb) | 7 |
+| RF-L1 | Servir o Jay Link ao Jay-C: `HELLO`, microfone sob pedido, `AUDIO` a cada 20 ms, estado com `deviceId` | 3 |
+| RF-L2 | Abrir só na bandeja com `--background`; instância única | 0 ✅ |
+| RF-S1 | Soundboard: importar clipes, tocar por clique ou atalho global, escolher os destinos (chamada, fones), volume por clipe e parar tudo | 4 |
+| RF-E1 | Editor: cortar, fade, ganho, normalizar (pico ou LUFS), inverter, velocidade, aplicar um preset de filtros; desfazer, prévia, exportar | 6 |
+| RF-C1 | Conversão em lote entre WAV, FLAC, MP3, OGG e Opus (abre também M4A/AAC, AIFF, ALAC), com cancelar e sem sobrescrever sem perguntar | 5 |
+| RF-A1 | Os três estilos e os temas do Jay-C, inglês e português, bandeja com Abrir e Sair | 0 ✅ |
+
+### Requisitos não funcionais
+
+| # | Requisito | Como medir |
+|---|---|---|
+| RNF-1 Latência | A cadeia da etapa 2 soma no máximo **5 ms** (o lookahead do limitador; filtros IIR, gate e compressor não atrasam). Com a supressão forte, até **40 ms**. O link soma no máximo 5 ms no p99 sobre o microfone nativo do Jay-C | a latência que cada efeito informa; a correlação com a reserva do Jay-C (S1) |
+| RNF-2 Continuidade | Com o microfone ligado, um bloco de `AUDIO` a cada 20 ms, também em silêncio; **nenhum intervalo acima de 60 ms** | `jay_a_probe` do Jay-C por 30 s |
+| RNF-3 Tempo real | A thread de áudio **nunca espera**: não pega lock bloqueante, não aloca memória, não lê disco nem pipe. Mudanças chegam por fila e entram entre quadros (seção 5) | revisão de código; teste que mexe nos parâmetros 1 000 vezes por segundo sem buraco |
+| RNF-4 Sem estalo | Mudar parâmetro, ligar/desligar efeito, reordenar e trocar preset fazem rampa de no máximo 10 ms; nenhum degrau na saída | teste com seno: a maior diferença entre amostras vizinhas não cresce na troca |
+| RNF-5 CPU | A cadeia da etapa 2, com todos os efeitos ligados, gasta menos de **2% de um núcleo** a 48 kHz mono (Ryzen 5 5600G, a máquina dos números do Jay-C) | teste de desempenho com 60 s de áudio |
+| RNF-6 Robustez | Microfone desconectado, arquivo corrompido ou atalho recusado viram um aviso na tela; nada derruba o app nem a chamada | os testes de cada etapa |
+| RNF-7 Privacidade | O microfone só abre quando o Jay-C pede ou num teste na tela; fechar a janela encerra o teste. Nenhum áudio sai do computador pelo Jay-A | o indicador de microfone do Windows |
+| RNF-8 Segurança | O pipe só aceita o usuário atual e nada de rede (seção 6); arquivos de áudio são entrada não confiável, com limites de tamanho e duração; decodificadores em Rust onde houver | revisão; arquivos corrompidos nos testes da conversão |
+| RNF-9 Plataforma | Windows 10 2004 ou mais novo, x64, WebView2 | — |
+| RNF-10 Licença | O Jay-A é **MIT**. Dependências permissivas (MIT, BSD, Apache, MPL por arquivo); LGPL só se o usuário puder trocar a biblioteca (é o caso num app de código aberto). Código GPL, como o do EasyEffects e o do Carla, não entra | `cargo tree` e `package-lock.json` revisados a cada dependência nova |
+| RNF-11 Acessibilidade e idioma | Tudo funciona pelo teclado, com rótulos para leitor de tela; contraste dos estilos do Jay-C; todo texto em inglês e em português | `npm test` (o teste de traduções) |
+| RNF-12 Tamanho | Instalador de até 20 MB, contando os modelos de supressão de ruído (o Jay-C tem 1,5 MB) | o `.exe` do instalador |
+
 ## 2. Decisões técnicas
 
 | Tema | Escolha | Motivo |
@@ -44,7 +80,12 @@ flowchart LR
 | Engine | Crate Rust **`jay-audio`**, sem dependência do Tauri | Testes com `cargo test` sem compilar o app (como o plugin `system-audio` do Jay-C). Os comandos Tauri ficam em `src-tauri`. |
 | Integração com o Jay-C | **Named pipe** `\\.\pipe\jay-a-link`, quadros opcode (u32 LE) + tamanho (u32 LE) + dados | É o formato que o `discord.rs` do Jay-C já fala, sem dependência nova. Sem porta TCP: nada de firewall, e o Windows informa o PID de quem conectou. |
 | Filtros base | **WebRTC AudioProcessing**, copiado do Jay-C (`third_party/`, `jayc_apm.cpp`, `apm.rs`), que continua com o dele | Já está medido (33 dB de eco removidos) e é o mesmo do Chromium e do Discord. |
-| Filtros próprios | Biquad (passa-altas, EQ), compressor, gate e limitador **escritos à mão** em Rust | Cada um tem 30–60 linhas (receitas RBJ). Não vale uma dependência. |
+| Filtros próprios | Biquad (filtros e EQ), gate, compressor, de-esser e limitador **escritos à mão** em Rust | Cada um tem 30–80 linhas (receitas RBJ para os biquads). Não vale uma dependência, e o código GPL do EasyEffects não pode entrar. |
+| Cadeia de efeitos | **Rack**: uma lista ordenada de instâncias (`gate#0`, `eq#1`) que a pessoa monta, como o EasyEffects e o modo rack do Carla | A ordem certa depende da voz e do microfone; uma ordem fixa não serve a todos. O patchbay (grafo livre) do Carla é poder demais para voz. |
+| Parâmetros | Cada parâmetro tem padrão, mínimo, máximo, passo e escala (linear, logarítmica, dB), e todo valor recebido é clampado, como os `ParameterRanges` do Carla | A UI gera os controles a partir da descrição, e um preset com valor fora da faixa não quebra nada |
+| Supressão de ruído forte | `nnnoiseless` (RNNoise em Rust, BSD) e `libDF` (DeepFilterNet em Rust, MIT/Apache) | As mesmas que o EasyEffects usa, com licenças compatíveis com MIT |
+| Loudness | `ebur128` (MIT) | Normalizar em LUFS no editor e na conversão, como o autogain do EasyEffects (libebur128) |
+| Licença | **MIT** (D6), arquivo `LICENSE` | Igual ao Jay-C |
 | Decodificar | **symphonia** (Rust puro, MPL-2.0) | MP3, AAC/M4A, FLAC, WAV, OGG Vorbis, ALAC, AIFF. Arquivos do usuário são entrada não confiável, e Rust puro evita bugs de memória num decodificador em C. |
 | Reamostrar | **rubato** (MIT) | Tudo vira 48 kHz f32 dentro do engine. |
 | Codificar | `hound` (WAV), `flacenc` (FLAC), `mp3lame-encoder` (MP3), `vorbis_rs` (OGG), `opus` + `ogg` (Opus) | Ver o spike S3: os três últimos compilam C e precisam ser testados com MSVC. |
@@ -59,7 +100,8 @@ flowchart LR
 ```
 Jay-A/
 ├─ package.json                  # npm workspaces: frontend
-├─ docs/ARQUITETURA.md
+├─ LICENSE                       # MIT
+├─ docs/ARQUITETURA.md, docs/REFERENCIAS.md   # este plano; o estudo do EasyEffects e do Carla
 ├─ crates/jay-audio/             # engine: sem Tauri, testável com cargo test
 │  ├─ build.rs                   # compila o WebRTC APM (Meson + MSVC), como no Jay-C
 │  ├─ native/jayc_apm.cpp        # camada C do APM, igual à do Jay-C
@@ -70,7 +112,9 @@ Jay-A/
 │     ├─ mic.rs                  # microfone WASAPI + APM (etapa 1, do win.rs do Jay-C)
 │     ├─ monitor.rs              # "Ouvir meu microfone" (etapa 1)
 │     ├─ loopback.rs             # referência de eco: process loopback do Jay-C (etapa 3)
-│     ├─ dsp/                    # gate.rs, biquad.rs, compressor.rs, limiter.rs, chain.rs, presets.rs (etapa 2)
+│     ├─ dsp/                    # etapa 2: params.rs (ParamSpec), effect.rs (Effect + controles comuns),
+│     │                          # chain.rs (rack, troca sem lock), presets.rs; effects/ gate, filter, eq,
+│     │                          # compressor, deesser, limiter; etapa 7: denoise, pitch, robot, reverb
 │     ├─ soundboard.rs           # biblioteca, vozes, mistura
 │     ├─ files/                  # decode.rs, encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
 │     └─ link.rs                 # servidor do Jay Link
@@ -102,7 +146,10 @@ flowchart LR
   APP --> E["Editor"]
   APP --> C["Converter"]
   APP --> CFG["Configurações"]
-  F --> F1["microfone, medidor, presets,<br/>blocos da cadeia, ouvir meu microfone,<br/>estado do Jay-C (ligado, mutado)"]
+  F --> F0["microfone, WebRTC (ruído, ganho),<br/>ouvir meu microfone, estado do Jay-C"]
+  F --> F1["cadeia: adicionar, reordenar,<br/>ligar/desligar, medidores por efeito"]
+  F --> F2["presets: os do app, salvar,<br/>importar e exportar JSON"]
+  F1 -- "clicar num efeito" --> F3["parâmetros: slider, valor,<br/>voltar ao padrão"]
   S --> S1["grade de clipes, importar (arrastar),<br/>volume, atalho, destinos, parar tudo"]
   S1 -- "aparar um clipe" --> E
   E --> E1["forma de onda, seleção, operações,<br/>desfazer, prévia, exportar"]
@@ -115,38 +162,127 @@ flowchart LR
 
 ## 5. Filtros do microfone
 
+### O caminho do áudio
+
 ```mermaid
 flowchart LR
   M["Microfone<br/>WASAPI, 48 kHz"] --> APM
   REF["Referência de eco:<br/>loopback da árvore WebView2 do Jay-C"] --> SUM(("+"))
   MON["Monitor do soundboard<br/>(o que o Jay-A toca nos fones)"] --> SUM
   SUM -- "render" --> APM["WebRTC APM<br/>eco, ruído, ganho automático"]
-  APM --> G["Volume"] --> GT["Gate<br/>sensibilidade"] --> EQ["Passa-altas + EQ"] --> CP["Compressor"] --> FX["Efeitos de voz<br/>etapa 7"]
-  FX --> MIX(("+"))
+  APM --> R1
+  subgraph RACK["Cadeia do usuário: ordem e efeitos escolhidos por ele (exemplo do preset Voz limpa)"]
+    R1["Filtro<br/>passa-altas 80 Hz"] --> R2["Gate"] --> R3["Equalizador"] --> R4["Compressor"] --> R5["De-esser"]
+  end
+  R5 --> MIX(("+"))
   SB["Soundboard<br/>vozes ativas"] --> MIX
   SB --> MON
-  MIX --> LIM["Limitador"] --> OUT["Jay Link<br/>blocos de 20 ms"]
-  LIM --> MET["Medidor na UI"]
+  MIX --> LIM["Limitador fixo<br/>-1 dBFS, lookahead 5 ms"] --> OUT["Jay Link<br/>blocos de 20 ms"]
+  LIM --> MET["Medidor final<br/>e Ouvir meu microfone"]
 ```
 
+- **Três partes:** uma frente fixa (microfone e WebRTC APM), a **cadeia do usuário** no meio, e um fim fixo (soundboard e limitador). A pessoa só mexe na cadeia do meio.
+- **O WebRTC APM fica sempre na frente:** o cancelamento de eco precisa do sinal do microfone sem nenhum efeito antes, para o filtro adaptativo achar o eco. O EasyEffects deixa o echo canceller em qualquer posição; aqui ele não sai do lugar.
+- **O limitador fica sempre no fim:** voz mais soundboard nunca passam de −1 dBFS, nem com um preset ruim.
 - **Referência de eco:** a mesma técnica do Jay-C hoje (process loopback da árvore do `msedgewebview2.exe` filho do Jay-C), só que aberta de outro processo. O Jay-A acha essa árvore pelo PID de quem conectou no pipe (`GetNamedPipeClientProcessId`), sem confiar num PID mandado na mensagem. Spike S2.
 - **O monitor entra na referência:** o soundboard tocado nos fones/alto-falantes pode voltar pelo microfone. Somando o que o Jay-A toca à referência, o AEC tira esse retorno e os outros não ouvem o clipe duas vezes.
-- **O soundboard entra depois do gate e da supressão de ruído:** antes, a supressão trataria música como ruído e o gate cortaria clipes baixos. Ele só passa pelo limitador, que evita estourar quando voz e clipe somam.
-- **Volume e gate** são o `mic-shape.js` do Jay-C portado para Rust, com o mesmo comportamento (hold de 300 ms e rampa por bloco, para não estalar) e os mesmos testes.
-- **Presets** são cadeias salvas em JSON (ex.: "Voz limpa", "Podcast", "Rádio"). Trocar de preset ou mexer num controle vale no próximo quadro de 10 ms, sem reabrir o microfone. Os parâmetros mudam com rampa, para não estalar.
-- **Ouvir meu microfone:** manda a saída da cadeia para os fones, para ajustar os filtros. Só com fones: nos alto-falantes, vira microfonia (aviso na UI).
-- **Supressão de ruído forte (opcional, etapa 7):** RNNoise pelo crate `nnnoiseless` (Rust puro, BSD), também em quadros de 480 amostras.
+- **O soundboard entra depois da cadeia:** antes dela, a supressão trataria música como ruído e o gate cortaria clipes baixos. Ele só passa pelo limitador.
+- **Ouvir meu microfone:** manda a saída para os fones, para ajustar os filtros. Só com fones: nos alto-falantes, vira microfonia (aviso na UI).
 
-### Referências (estudar antes das etapas 2 e 7)
+### Um efeito da cadeia
 
-Pedido do usuário: aprender com filtros open-source antes de escrever os do Jay-A.
+Todo efeito ganha os mesmos controles, aplicados pelo host do mesmo jeito para todos (a ideia dos controles de entrada/saída do EasyEffects e do pós-processamento do Carla):
 
-| Projeto | Licença | O que estudar | Como usar no Jay-A |
+```mermaid
+flowchart LR
+  IN["entrada<br/>10 ms"] --> GI["ganho de entrada"] --> MI["medidor de entrada"] --> BY{"ligado?"}
+  BY -- não --> OUT
+  BY -- sim --> P["processa<br/>(o efeito em si)"] --> DW["dry/wet<br/>(se o efeito aceitar)"] --> GO["ganho de saída"] --> MO["medidor de saída"] --> OUT["saída<br/>para o próximo"]
+```
+
+```rust
+// O que cada efeito implementa (esboço da etapa 2).
+trait Effect: Send {
+    fn params(&self) -> &'static [ParamSpec];   // a UI e os presets usam isto
+    fn set_param(&mut self, id: usize, value: f32); // já clampado; o efeito faz a rampa
+    fn process(&mut self, frame: &mut [f32; 480]);  // 10 ms, mono, no lugar
+    fn latency_frames(&self) -> usize { 0 }
+    fn reset(&mut self) {}                          // ao religar: limpa memórias (envelopes, filtros)
+}
+
+struct ParamSpec { key: &'static str, min: f32, max: f32, default: f32, step: f32, scale: Scale, unit: Unit }
+enum Scale { Linear, Log, Db }
+```
+
+- **Desligar um efeito** passa o áudio direto, com uma rampa de 10 ms entre o processado e o original. Ao religar, o efeito chama `reset()`, para não soltar um envelope velho.
+- **Latência:** cada efeito informa a sua. A cadeia soma e mostra o total na tela (RNF-1). O dry/wet de um efeito com latência atrasa o sinal seco na mesma medida.
+- **Medidores:** pico e RMS de entrada e de saída de cada efeito, mandados à tela umas 20 vezes por segundo, só enquanto a aba Filtros está aberta.
+
+### Catálogo de efeitos
+
+As faixas partem das do EasyEffects (`REFERENCIAS.md`, seção 1.3), ajustadas para voz ao vivo. Todos aceitam ganho de entrada e de saída (−24 a +24 dB) e liga/desliga.
+
+| Efeito | Parâmetros: padrão [faixa] | Latência | Etapa |
 |---|---|---|---|
-| [EasyEffects](https://github.com/wwmm/easyeffects) (Linux, PipeWire) | GPL-3.0 | A lista de efeitos (gate, expander, compressor, limitador, de-esser, equalizador, filtros, loudness, pitch shift, reverb, redução de ruído), a **ordem dos efeitos escolhida pelo usuário**, os presets e as faixas de parâmetros de cada efeito | Ideias, faixas e ordem; **sem copiar código**. As bibliotecas que ele usa têm versões que servem: RNNoise → `nnnoiseless` (BSD, já no plano), DeepFilterNet (MIT/Apache, feito em Rust) para a supressão forte, libebur128 → `ebur128` (MIT) para loudness em LUFS no editor e na conversão |
-| [Carla](https://github.com/falkTX/Carla) | GPL-2.0 ou posterior | Como um host carrega plugins LV2, VST2, VST3 e AU, em modo "rack" (em série) ou "patchbay" (grafo), e expõe os parâmetros deles | Referência para uma decisão futura: aceitar plugins VST3/CLAP na cadeia (D7) |
+| **Filtro** (biquad) | tipo: passa-altas, passa-baixas, shelf grave, shelf agudo, bell, notch; frequência 80 Hz [20..20000, log]; Q 0,71 [0,1..10]; ganho 0 dB [−24..24]; inclinação 12 ou 24 dB/oitava | 0 | 2 |
+| **Gate** | abre em −45 dB [−80..0]; **histerese** 6 dB [0..20] (fecha em −51 dB); attack 2 ms [0..50]; **hold** 300 ms [0..1000], como o do Jay-C; release 150 ms [5..2000]; redução −60 dB [−80..0] | 0 | 2 |
+| **Equalizador** | até 10 bandas, cada uma um Filtro acima; padrão: 5 bandas planas (100, 300, 1k, 3k, 8k Hz) | 0 | 2 |
+| **Compressor** | limiar −18 dB [−60..0]; ratio 3 [1..20]; joelho 6 dB [0..24]; attack 10 ms [0,1..200]; release 120 ms [10..2000]; makeup 0 dB [0..24]; detecção RMS ou pico; dry/wet | 0 | 2 |
+| **De-esser** | frequência 6 kHz [3000..12000]; limiar −18 dB [−60..0]; ratio 3 [1..20]; redução só na faixa aguda | 0 | 2 |
+| **Limitador** (fixo no fim; também pode entrar na cadeia) | limiar −1 dBFS [−24..0]; lookahead 5 ms [1..10]; release 50 ms [5..500] | lookahead | 2 |
+| **Supressão de ruído forte** | modelo: RNNoise (`nnnoiseless`) ou DeepFilterNet (`libDF`); RNNoise: VAD com limiar 50% [0..100] e release 200 ms [0..2000]; DeepFilterNet: limite de atenuação 30 dB [0..100]; dry/wet | RNNoise ~10 ms; DeepFilterNet medir (S5) | 7 |
+| **Tom** | semitons 0 [−12..12], cents 0 [−100..100]; dry/wet | medir (S4) | 7 |
+| **Robô** | modulação em anel: frequência 50 Hz [10..500]; dry/wet | 0 | 7 |
+| **Reverb** | tamanho, amortecimento, pré-delay; dry/wet | 0 | 7 |
 
-Se o Jay-A for GPL (D6), o código desses projetos poderia ser aproveitado. Mantendo MIT, como o Jay-C, só as ideias.
+Fora do catálogo do v1 (estão no EasyEffects, mas não ajudam numa chamada de voz ou custam latência): convolver, crossfeed e ferramentas de estéreo, multibanda, bass enhancer, exciter, autotune e harmonizer.
+
+### Tempo real
+
+A thread de áudio nunca espera ninguém (RNF-3). No Carla, o loop do rack pula um plugin que está sendo mexido (`tryLock`). Aqui, nada é mexido por fora: tudo chega por fila.
+
+```mermaid
+sequenceDiagram
+  participant UI as UI (página)
+  participant CT as Controle (Rust, comando Tauri)
+  participant DSP as Thread de áudio
+  UI->>CT: set_param(gate, abre, -40)
+  CT->>CT: clampa na faixa do ParamSpec
+  CT->>DSP: fila: SetParam
+  Note over DSP: no começo do próximo quadro de 10 ms
+  DSP->>DSP: aplica, com rampa de até 10 ms
+  UI->>CT: mover o compressor para antes do gate
+  CT->>CT: monta a cadeia nova fora da thread de áudio (efeitos já criados, buffers alocados)
+  CT->>DSP: fila: SwapChain(nova)
+  DSP->>DSP: no limite do quadro, troca e faz um crossfade de 10 ms entre a velha e a nova
+  DSP->>CT: fila de volta: a cadeia velha
+  CT->>CT: libera a cadeia velha (fora da thread de áudio)
+  DSP-->>UI: medidores e latência (~20 por segundo, só com a aba aberta)
+```
+
+- **Filas:** `std::sync::mpsc`. A thread de áudio só usa `try_recv`, que não bloqueia. Nada de dependência nova.
+- **Ninguém aloca nem libera memória na thread de áudio:** a cadeia nova chega pronta, e a velha volta para ser liberada fora dela.
+- **Crossfade na troca de cadeia:** durante 10 ms, as duas cadeias rodam e as saídas se misturam. Assim, reordenar ou trocar de preset não estala (RNF-4).
+
+### Presets
+
+JSON, com a ordem e os parâmetros de cada instância, como os do EasyEffects:
+
+```json
+{
+  "format": "jay-a-preset", "version": 1, "name": "Voz limpa",
+  "chain": ["filter#0", "gate#0", "eq#0", "compressor#0", "deesser#0"],
+  "effects": {
+    "filter#0": { "enabled": true, "inputGain": 0, "outputGain": 0, "type": "highpass", "frequency": 80 },
+    "gate#0": { "enabled": true, "open": -45, "hysteresis": 6, "hold": 300 }
+  },
+  "webrtc": { "noiseSuppression": true, "autoGainControl": true }
+}
+```
+
+- **Os que vêm com o app:** Voz limpa (a cadeia acima), Podcast (compressão mais forte e EQ de presença), Só ruído (só o WebRTC, cadeia vazia) e Rádio (filtro de banda estreita e compressor pesado).
+- **Ler um preset é validar:** efeito desconhecido é pulado com aviso, e parâmetro desconhecido é ignorado. Valor fora da faixa é clampado, e parâmetro que falta fica no padrão. `version` maior que a do app recusa o preset com uma mensagem.
+- **Onde ficam:** `presets/` na pasta de dados do app. Importar copia o arquivo; exportar grava onde a pessoa escolher.
 
 **Threads do engine:**
 
@@ -224,6 +360,18 @@ Quadro: `opcode` (u32 LE) + `tamanho` (u32 LE) + dados. Controle em JSON; áudio
 - O Jay-C não confere qual executável é o servidor: um programa malicioso rodando como o mesmo usuário já pode abrir o microfone sozinho, então a checagem não protegeria nada.
 - Mensagens de controle com no máximo 64 KB; JSON inválido ou opcode desconhecido fecha a conexão.
 
+### O que o cliente do Jay-C exige (já implementado lá)
+
+O cliente está em `plugins/tauri-plugin-system-audio/src/link.rs` do JayC (commit `2d2d618`, etapa I1 dele). O servidor do Jay-A precisa:
+- responder o `HELLO` com `protocol: 1`, `sampleRate: 48000`, `channels: 1`, `frameMs: 20`. Um `{ error }` vira "incompatível" no Jay-C;
+- mandar `AUDIO` com **exatamente 3 840 bytes**. Opcode desconhecido, JSON que não é objeto e mensagem acima de 64 KB (checado pelo cabeçalho) fecham o link;
+- responder `PING` com `PONG`. O Jay-C manda `PING` a cada 5 s e dá o link como morto depois de **10 s sem nenhum quadro**;
+- **ler e escrever no pipe sem uma operação bloquear a outra**: num pipe síncrono, uma leitura pendente trava as escritas no mesmo handle. O pipe usa `FILE_FLAG_OVERLAPPED` (ou uma thread de leitura e outra de escrita que não dividem o mesmo bloqueio). O Jay-A falso do Jay-C (`src/link/fake.rs`) é a referência: `CreateNamedPipeW` com `PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED | FILE_FLAG_FIRST_PIPE_INSTANCE` e `PIPE_REJECT_REMOTE_CLIENTS`, uma instância por vez;
+- **rodar como o mesmo usuário do Windows que o Jay-C**, sem elevação. O cliente confere o SID do processo servidor (`GetNamedPipeServerProcessId`) e recusa na dúvida;
+- modo byte ou mensagem, tanto faz: o cliente lê em modo byte.
+
+**Teste:** `cargo run --example jay_a_probe -- [PIPE] [SEGUNDOS]` no plugin `system-audio` do JayC. Ele conecta, faz o `HELLO`, pede o microfone por 30 s e mede os intervalos entre blocos (p50, p99, máximo). Passa se o link não fechou, se veio áudio e se nenhum intervalo passou de 60 ms. Medido pelo Jay-C contra o Jay-A falso: p99 de 32,1 ms, PASS; um travamento de 200 ms dá FAIL, como deve.
+
 ## 7. Soundboard
 
 ```mermaid
@@ -261,7 +409,7 @@ flowchart LR
 |---|---|
 | Cortar, apagar trecho, manter só a seleção | índices de amostra |
 | Fade in / fade out | rampa linear ou de potência igual |
-| Ganho, normalizar (pico) | multiplicação; o pico vem da varredura do arquivo |
+| Ganho, normalizar (pico ou loudness) | multiplicação; o pico vem da varredura do arquivo, o loudness (LUFS, EBU R128) do `ebur128` |
 | Inverter | — |
 | Velocidade (muda o tom junto) | rubato |
 | Tom ou tempo separados | etapa 7, junto com os efeitos de voz (spike S4) |
@@ -281,7 +429,7 @@ flowchart TD
   P --> D["Decodificar em blocos (symphonia)"]
   D --> R["Reamostrar e ajustar canais (rubato)"]
   R --> X{"Normalizar?"}
-  X -- sim --> PK["Primeira passada: acha o pico"] --> ENC
+  X -- sim --> PK["Primeira passada: acha o pico<br/>ou o loudness (LUFS)"] --> ENC
   X -- não --> ENC["Codificar"]
   ENC --> TMP["Grava name.ext.tmp na pasta de saída"]
   TMP --> REN{"Já existe name.ext?"}
@@ -309,7 +457,7 @@ O plano e a lista de arquivos são do Jay-C: `docs/JAY-A.md`, seções 6 e 7, co
 - **Plugin `system-audio`:** `link.rs` (cliente do Jay Link, no formato do `discord.rs`), `selector.rs` (troca a fonte bloco a bloco) e o modo Jay-A no `Mic` (`start_mic({ filter: "jay-a" })`), com os estados em JSON pelo mesmo Channel.
 - **Interface:** Settings › Áudio › Filtro do microfone (Jay-A ou Jay-C), o estado do link, o botão "Abrir Jay-A" e os avisos de troca. Os ajustes do filtro do Jay-C continuam, porque valem na reserva.
 - **Nada é removido do Jay-C** (D1 = b): o APM, o `mic-shape.js` e o build com Meson ficam.
-- **Para testar este lado:** o Jay-C vai ter um Jay-A falso (`cargo run --example fake_jay_a`) e um cliente de teste (`cargo run --example jay_a_probe`), que pede o microfone ao Jay-A por 30 s e passa se não houver buraco maior que 60 ms entre blocos.
+- **Para testar este lado:** o Jay-C já tem o Jay-A falso (`cargo run --example fake_jay_a --features fake-jay-a`) e o cliente de teste `jay_a_probe` (seção 6), desde o commit `2d2d618` do JayC.
 
 ## 11. Riscos e spikes
 
@@ -318,7 +466,9 @@ O plano e a lista de arquivos são do Jay-C: `docs/JAY-A.md`, seções 6 e 7, co
 | S1 | Latência do link: bloco de 20 ms pelo pipe até o `Channel` do Jay-C | o `jay_a_probe` do Jay-C passa (nenhum buraco > 60 ms); atraso extra medido pela correlação com a reserva do Jay-C, meta ≤ 5 ms no p99 |
 | S2 | AEC com a referência aberta por outro processo | o teste de eco do Jay-C repetido com o Jay-A abrindo o loopback do Jay-C; mesma remoção (~33 dB) |
 | S3 | Codificadores com MSVC (`mp3lame-encoder`, `vorbis_rs`, `opus`) e decodificação de Opus | os três compilam no Windows; um WAV vira MP3, OGG e Opus que tocam no navegador |
-| S4 | Tom/tempo ao vivo (ex.: `signalsmith-stretch`) | latência e CPU medidas com voz real |
+| S4 | Tom/tempo ao vivo (ex.: `signalsmith-stretch`, MIT; o EasyEffects usa o SoundTouch, LGPL) | latência e CPU medidas com voz real |
+| S5 | DeepFilterNet (`libDF`, Rust) ao vivo a 48 kHz mono | latência e CPU medidas; tamanho do modelo no instalador (RNF-12) |
+| S6 | Troca de cadeia sem estalo (crossfade de 10 ms) e parâmetros mudando 1 000 vezes por segundo | o teste com seno do RNF-4 passa; nenhum quadro atrasa |
 
 Riscos:
 1. **Dois apps para a experiência completa.** Se o Jay-A travar no meio da chamada, a reserva quente do Jay-C assume no bloco seguinte. O risco que sobra é o Jay-A ficar lento sem parar: blocos atrasados mais de 60 ms fazem a fonte pular para a reserva. Medir no S1.
@@ -327,6 +477,8 @@ Riscos:
 4. **Dois microfones abertos ao mesmo tempo** (o do Jay-A e a reserva do Jay-C). Os dois em modo compartilhado; o Jay-C mede a CPU e confirma que os outros apps não abafam (spike 09 dele).
 5. **Licenças:** WebRTC APM (BSD), symphonia (MPL-2.0, por arquivo), LAME (LGPL), libopus e libvorbis (BSD). Todas compatíveis com um app MIT open-source; listar no README.
 6. **Só Windows ao vivo** (WASAPI). Editor e conversão poderiam rodar em outros sistemas depois, mas não é meta do v1.
+7. **Código GPL por engano.** Ler o EasyEffects e o Carla é permitido; copiar trechos não (RNF-10). Os efeitos são escritos a partir das receitas públicas (RBJ para biquads, a literatura de compressores) e das faixas anotadas em `REFERENCIAS.md`, nunca com o código deles aberto ao lado.
+8. **Uma cadeia montada pelo usuário pode soar mal** (ex.: compressor antes do gate, que levanta o ruído). Os presets do app dão um ponto de partida bom, e o limitador fixo impede estouros.
 
 ## 12. Etapas
 
@@ -336,12 +488,14 @@ Cada etapa termina com algo testável.
 |---|---|---|
 | 0 ✅ | Scaffold: Tauri v2 + Vite + Vanilla JS, ícones e estilos do Jay-C, bandeja, instância única, `--background` | `npm run dev` abre o Jay-A nos 3 estilos; fechar a janela deixa o ícone na bandeja |
 | 1 ✅ | Engine: microfone WASAPI (modo compartilhado) + APM (copiados do Jay-C), monitor e medidor | o teste de eco do Jay-C passa no `jay-audio`; o medidor mostra a voz; "Ouvir meu microfone" funciona |
-| 2 | Cadeia de filtros, presets e a aba Filtros (estudar o EasyEffects antes, seção 5) | cada bloco tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz); trocar preset ao vivo sem estalo |
+| 2a | Motor da cadeia: `ParamSpec`, `Effect` com os controles comuns, rack com troca sem lock e crossfade, presets JSON (S6) | testes: valores fora da faixa são clampados; preset com efeito desconhecido carrega com aviso; trocar a ordem 100 vezes durante um seno não estala (RNF-4); a latência somada bate com a informada |
+| 2b | Efeitos: filtro, gate (com histerese e hold), equalizador, compressor, de-esser e limitador; os 4 presets do app | cada efeito tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz; o gate fecha abaixo do limiar menos a histerese; o limitador nunca passa de −1 dBFS); CPU da cadeia inteira < 2% de um núcleo (RNF-5) |
+| 2c | Aba Filtros: a cadeia (adicionar, reordenar por arraste e por teclado, ligar/desligar), os parâmetros gerados do `ParamSpec`, os medidores por efeito, a latência total e os presets | pelo teclado, montar a cadeia do Voz limpa do zero; o que se ouve no "Ouvir meu microfone" muda na hora |
 | 3 | Servidor do Jay Link (S1, S2), junto com a I5 do Jay-C | o `jay_a_probe` do Jay-C passa; numa chamada, o outro lado ouve a voz filtrada pelo Jay-A; fechar o Jay-A não corta a voz (a reserva assume); o som de outros apps continua sem abafar (−7,8 dB, spike 09 do Jay-C) |
 | 4 | Soundboard | um clipe tocado por atalho, com um jogo em foco, chega à chamada e aos fones sem voltar como eco |
 | 5 | Conversão (S3) | lote de 10 arquivos mistos para WAV, FLAC, MP3, OGG e Opus; um arquivo corrompido falha sozinho e os outros saem |
 | 6 | Editor | cortar, fade, normalizar e exportar; desfazer volta ao estado anterior; a prévia toca no monitor |
-| 7 | Efeitos de voz ao vivo (tom, robô, reverb) + RNNoise (S4) | efeitos ao vivo com a latência extra medida (meta ≤ 40 ms) |
+| 7 | Supressão de ruído forte (RNNoise e DeepFilterNet) e efeitos de voz (tom, robô, reverb) (S4, S5) | cada efeito entra na cadeia como os da etapa 2; latência e CPU medidas (meta: ≤ 40 ms somando tudo) |
 | 8 | Soundboard dentro do Jay-C | o botão na barra da chamada lista e toca os clipes do Jay-A |
 | 9 | Release: instalador NSIS do Jay-A em `%LOCALAPPDATA%\Jay-A`; o Jay-C oferece o Jay-A | os dois instalados numa máquina limpa fazem uma chamada filtrada; o Jay-C sozinho continua funcionando com o filtro dele |
 
@@ -360,5 +514,5 @@ Cada etapa termina com algo testável.
 | D3 | "Modificação de áudio" | assumido: editor de arquivos (etapa 6) **e** efeitos de voz ao vivo (etapa 7). Confirmar se os dois são desejados |
 | D4 | Microfone virtual para outros apps (Discord, OBS) | fora do escopo: exige um driver de áudio assinado. Alternativa sem driver: o usuário instala o VB-Cable e o Jay-A toca nele |
 | D5 | Versão em inglês desta documentação | depois, como o `ARQUITETURA.en.md` do Jay-C |
-| D6 | Licença do Jay-A (ainda não tem) | **MIT**, como o Jay-C: dá para estudar o EasyEffects e o Carla, mas não copiar o código deles · GPL-3.0: o código deles pode entrar, mas o Jay-A inteiro (e quem o redistribuir) fica GPL |
-| D7 | Plugins de terceiros (VST3/CLAP) na cadeia de filtros, como o Carla faz | fora do v1: exige um host de plugins (janela de edição, estado, travamentos de plugin). Reavaliar depois da etapa 7 |
+| D6 ✅ | Licença do Jay-A | **Decidido: MIT**, como o Jay-C (pedido do usuário). O EasyEffects e o Carla servem de estudo, mas o código deles não entra (RNF-10). |
+| D7 | Plugins de terceiros (VST3/CLAP) na cadeia de filtros, como o Carla faz | fora do v1. Se entrar, segue o modelo do Carla: cada plugin num processo à parte, áudio por memória compartilhada, timeout por bloco (um plugin travado vira silêncio no lugar dele, não derruba a chamada) e versão de protocolo. Reavaliar depois da etapa 7 |

@@ -31,13 +31,18 @@
         "connect-src": "'self' ipc: http://ipc.localhost",
         "font-src": "'self' data:"
       },
-      "dangerousDisableAssetCspModification": ["style-src"]
+      "dangerousDisableAssetCspModification": [
+        "style-src"
+      ]
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "publisher": "TyxMatty",
+    "copyright": "© 2026 TyxMatty. MIT License.",
     "category": "Music",
     "shortDescription": "Audio filters, editing, soundboard and conversion",
     "icon": [

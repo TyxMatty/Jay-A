@@ -3,6 +3,7 @@ name = "jay-audio"
 version = "0.1.0"
 description = "Jay-A's audio engine: microphone, WebRTC audio processing, monitor"
 authors = ["TyxMatty"]
+license = "MIT"
 edition = "2024"
 rust-version = "1.90"
 links = "jay-audio"

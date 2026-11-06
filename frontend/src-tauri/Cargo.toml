@@ -3,6 +3,7 @@ name = "jay-a"
 version = "0.1.0"
 description = "Jay-A — audio filters, editing, soundboard and conversion"
 authors = ["TyxMatty"]
+license = "MIT"
 edition = "2024"
 rust-version = "1.90"
 

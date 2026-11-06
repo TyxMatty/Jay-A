@@ -2,6 +2,7 @@
   "name": "jay-a",
   "private": true,
   "description": "Jay-A — audio filters, editing, soundboard and conversion for the Jay line",
+  "license": "MIT",
   "workspaces": [
     "frontend"
   ],
