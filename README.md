@@ -1,29 +1,32 @@
 # Jay-A
 
-App de áudio da linha Jay: filtros do microfone (uma opção no [Jay-C](https://github.com/TyxMatty/JayC), no lugar do filtro dele), edição de áudio, soundboard e conversão de formatos. Windows primeiro.
+**English** · [Português](README.pt-BR.md)
 
-Arquitetura, fluxos e etapas: [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md). Hoje o app está na **etapa 0**: a janela (nos estilos Calmo, Neon e Suave do Jay-C) e o ícone na bandeja. As seções de áudio ainda são só a casca.
+The audio app of the Jay line: microphone filters (an option in [Jay-C](https://github.com/TyxMatty/JayC), in place of its own filter), audio editing, a soundboard and format conversion. Windows first.
 
-## Rodando
+Architecture, flows and stages: [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) (in Portuguese). For now the app has its window (in Jay-C's Calm, Neon and Soft styles), the tray icon and the microphone test in Filters (noise suppression, automatic gain, a level meter and "Hear my microphone"). The rest is still a shell.
 
-Precisa das mesmas ferramentas do Jay-C (Node 22+, Rust com MSVC; ver o `docs/CONTINUAR.md` dele).
+## Running
+
+It needs the same tools as Jay-C (Node 22+, Rust with MSVC, and Python with Meson and Ninja for WebRTC's audio processing; see Jay-C's `docs/CONTINUAR.en.md`).
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run dev` abre a janela do Jay-A (Tauri) com recarregamento automático. Fechar a janela deixa o Jay-A na bandeja; para sair, clique com o botão direito no ícone dele. `jay-a.exe --background` abre só na bandeja (é assim que o Jay-C vai iniciá-lo). Para abrir só a interface no navegador, sem Tauri: `npm run web` (porta 5175).
+`npm run dev` opens the Jay-A window (Tauri) with live reload. Closing the window keeps Jay-A in the tray; to quit, right-click its icon there. `jay-a.exe --background` starts it in the tray only (that's how Jay-C will start it). To open just the interface in a browser, without Tauri: `npm run web` (port 5175).
 
-O build do Rust gera vários GB. Para não ir para o OneDrive, crie um `.cargo/config.toml` (fica fora do git) apontando para outra pasta:
+The Rust build takes several GB. To keep it out of OneDrive, create a `.cargo/config.toml` (not tracked by git) pointing elsewhere:
 
 ```toml
 [build]
-target-dir = "C:/Users/<você>/.cargo-target/jay-a"
+target-dir = "C:/Users/<you>/.cargo-target/jay-a"
 ```
 
-## Testes
+## Tests
 
 ```bash
 npm test
+cd crates/jay-audio && cargo test
 ```
