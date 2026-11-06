@@ -1,0 +1,8 @@
+{
+  "format": "jay-a-preset",
+  "version": 1,
+  "name": "Noise only",
+  "chain": [],
+  "effects": {},
+  "webrtc": { "noiseSuppression": true, "autoGainControl": true }
+}

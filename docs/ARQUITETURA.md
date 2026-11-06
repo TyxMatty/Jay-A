@@ -114,8 +114,9 @@ Jay-A/
 │     ├─ loopback.rs             # referência de eco: process loopback do Jay-C (etapa 3)
 │     ├─ dsp/                    # 2a ✅: params.rs (ParamSpec, controles comuns), effect.rs (Effect, lista
 │     │                          # de efeitos), chain.rs (rack, troca sem lock, crossfade), preset.rs (JSON);
-│     │                          # 2b: effects/ filter, gate, eq, compressor, deesser, limiter;
+│     │                          # 2b ✅: effects/ biquad, filter, eq, gate, compressor, deesser, limiter;
 │     │                          # 7: denoise, pitch, robot, reverb
+│     ├─ presets/                # os presets que vêm com o app (clean-voice, podcast, noise-only, radio)
 │     ├─ soundboard.rs           # biblioteca, vozes, mistura
 │     ├─ files/                  # decode.rs, encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
 │     └─ link.rs                 # servidor do Jay Link
@@ -232,7 +233,7 @@ As faixas partem das do EasyEffects (`REFERENCIAS.md`, seção 1.3), ajustadas p
 | **Gate** | abre em −45 dB [−80..0]; **histerese** 6 dB [0..20] (fecha em −51 dB); attack 2 ms [0..50]; **hold** 300 ms [0..1000], como o do Jay-C; release 150 ms [5..2000]; redução −60 dB [−80..0] | 0 | 2 |
 | **Equalizador** | até 10 bandas, cada uma um Filtro acima; padrão: 5 bandas planas (100, 300, 1k, 3k, 8k Hz) | 0 | 2 |
 | **Compressor** | limiar −18 dB [−60..0]; ratio 3 [1..20]; joelho 6 dB [0..24]; attack 10 ms [0,1..200]; release 120 ms [10..2000]; makeup 0 dB [0..24]; detecção RMS ou pico; dry/wet | 0 | 2 |
-| **De-esser** | frequência 6 kHz [3000..12000]; limiar −18 dB [−60..0]; ratio 3 [1..20]; redução só na faixa aguda | 0 | 2 |
+| **De-esser** | frequência 6 kHz [3000..12000]; limiar −18 dB [−60..0]; ratio 3 [1..20]; um crossover Linkwitz-Riley de 24 dB/oitava separa os agudos (as duas metades somam de volta a um nível plano), e só eles são comprimidos | 0 | 2 |
 | **Limitador** (fixo no fim; também pode entrar na cadeia) | limiar −1 dBFS [−24..0]; lookahead 5 ms [1..10]; release 50 ms [5..500] | lookahead | 2 |
 | **Supressão de ruído forte** | modelo: RNNoise (`nnnoiseless`) ou DeepFilterNet (`libDF`); RNNoise: VAD com limiar 50% [0..100] e release 200 ms [0..2000]; DeepFilterNet: limite de atenuação 30 dB [0..100]; dry/wet | RNNoise ~10 ms; DeepFilterNet medir (S5) | 7 |
 | **Tom** | semitons 0 [−12..12], cents 0 [−100..100]; dry/wet | medir (S4) | 7 |
@@ -267,6 +268,7 @@ sequenceDiagram
 - **Filas:** `std::sync::mpsc`. A thread de áudio só usa `try_recv`, que não bloqueia. Nada de dependência nova.
 - **Ninguém aloca nem libera memória na thread de áudio:** a cadeia nova chega pronta, e a velha volta para ser liberada fora dela.
 - **Crossfade na troca de cadeia:** durante 10 ms, as duas cadeias rodam e as saídas se misturam. Assim, reordenar ou trocar de preset não estala (RNF-4).
+- **Filtros mudam com velocidade limitada:** frequência e Q andam no máximo meia oitava, e o ganho 2 dB, por quadro, e os coeficientes deslizam dentro do quadro. Digitar 2000 Hz por cima de 20 Hz vira uma varredura de ~130 ms. Só deslizar os coeficientes num quadro ainda estalava em saltos assim (medido na 2b).
 
 ### Presets
 
@@ -284,7 +286,7 @@ JSON, com a ordem e os parâmetros de cada instância, como os do EasyEffects:
 }
 ```
 
-- **Os que vêm com o app:** Voz limpa (a cadeia acima), Podcast (compressão mais forte e EQ de presença), Só ruído (só o WebRTC, cadeia vazia) e Rádio (filtro de banda estreita e compressor pesado).
+- **Os que vêm com o app** (`crates/jay-audio/presets/`, no mesmo formato, lidos do mesmo jeito): Voz limpa (`clean-voice`, a cadeia acima), Podcast (`podcast`: compressão mais forte e EQ de presença), Só ruído (`noise-only`: só o WebRTC, cadeia vazia) e Rádio (`radio`: passa-altas em 300 Hz e passa-baixas em 3,4 kHz de 24 dB/oitava, compressor pesado). O nome no arquivo é em inglês, e a tela traduz.
 - **Ler um preset é validar:** efeito desconhecido é pulado com aviso, e parâmetro desconhecido é ignorado. Valor fora da faixa é clampado, e parâmetro que falta fica no padrão. `version` maior que a do app recusa o preset com uma mensagem.
 - **Onde ficam:** `presets/` na pasta de dados do app. Importar copia o arquivo; exportar grava onde a pessoa escolher.
 
@@ -496,7 +498,7 @@ Cada etapa termina com algo testável.
 | 0 ✅ | Scaffold: Tauri v2 + Vite + Vanilla JS, ícones e estilos do Jay-C, bandeja, instância única, `--background` | `npm run dev` abre o Jay-A nos 3 estilos; fechar a janela deixa o ícone na bandeja |
 | 1 ✅ | Engine: microfone WASAPI (modo compartilhado) + APM (copiados do Jay-C), monitor e medidor | o teste de eco do Jay-C passa no `jay-audio`; o medidor mostra a voz; "Ouvir meu microfone" funciona |
 | 2a ✅ | Motor da cadeia: `ParamSpec`, `Effect` com os controles comuns, rack com troca sem lock e crossfade, presets JSON (S6) | testes: valores fora da faixa são clampados; preset com efeito desconhecido carrega com aviso; trocar a ordem 100 vezes durante um seno não estala (RNF-4); a latência somada bate com a informada |
-| 2b | Efeitos: filtro, gate (com histerese e hold), equalizador, compressor, de-esser e limitador; os 4 presets do app | cada efeito tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz; o gate fecha abaixo do limiar menos a histerese; o limitador nunca passa de −1 dBFS); CPU da cadeia inteira < 2% de um núcleo (RNF-5) |
+| 2b ✅ | Efeitos: filtro, gate (com histerese e hold), equalizador, compressor, de-esser e limitador; os 4 presets do app | cada efeito tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz; o gate fecha abaixo do limiar menos a histerese; o limitador nunca passa de −1 dBFS); CPU da cadeia inteira < 2% de um núcleo (RNF-5) |
 | 2c | Aba Filtros: a cadeia (adicionar, reordenar por arraste e por teclado, ligar/desligar), os parâmetros gerados do `ParamSpec`, os medidores por efeito, a latência total e os presets | pelo teclado, montar a cadeia do Voz limpa do zero; o que se ouve no "Ouvir meu microfone" muda na hora |
 | 3 | Servidor do Jay Link (S1, S2), junto com a I5 do Jay-C | o `jay_a_probe` do Jay-C passa; numa chamada, o outro lado ouve a voz filtrada pelo Jay-A; fechar o Jay-A não corta a voz (a reserva assume); o som de outros apps continua sem abafar (−7,8 dB, spike 09 do Jay-C) |
 | 4 | Soundboard | um clipe tocado por atalho, com um jogo em foco, chega à chamada e aos fones sem voltar como eco |
@@ -521,6 +523,18 @@ Cada etapa termina com algo testável.
 - **Presets:** efeito desconhecido, parâmetro desconhecido, valor fora da faixa, valor inválido, id repetido e id inválido carregam com aviso; formato errado, sem versão ou versão maior são recusados; salvar e ler de novo dá o mesmo; mais de 32 efeitos são cortados.
 - Cada teste foi conferido "quebrando" o código de propósito (os valores "sem ..." acima): todos falham com o defeito e passam sem ele.
 - **Ainda não ligado ao microfone:** a cadeia entra no caminho do áudio na 2c, junto com os comandos da tela. A 2b traz os efeitos de verdade.
+
+**Etapa 2b, medido (2026-11-06)** (`cargo test` no `crates/jay-audio`; tons de teste, medidos na segunda metade, depois de os filtros assentarem):
+- **Filtro:** o passa-altas de 80 Hz tira ≥ 20 dB em 20 Hz e deixa 1 kHz a ±0,5 dB; em 24 dB/oitava tira 15 dB a mais. Passa-baixas de 3,4 kHz (24 dB/oitava): ≤ −30 dB em 10 kHz. Bell de +6 dB: +6 ± 0,3 no centro. Notch: ≤ −30 dB. Shelves de ±6 dB: ±6 ± 0,7 de um lado, 0 ± 0,5 do outro.
+- **Filtro mudando de 20 Hz para 2 kHz (e de volta) com um tom passando:** sem estalo (salto < 0,08; o tom sozinho salta 0,065). Só com o deslize num quadro, o salto foi 0,22.
+- **Equalizador:** plano por padrão (±0,05 dB em 50 Hz, 300 Hz, 1 kHz e 8 kHz); uma banda de +6 dB dá +6 ± 0,3 nela e 0 ± 0,5 longe dela.
+- **Gate:** passa a voz acima de −45 dB; entre −45 e −51 dB (a histerese) continua aberto; abaixo de −51 dB fecha (≤ −55 dB na saída); reabre em até 20 ms. Sem a histerese, o teste falha.
+- **Compressor:** um seno a −9 dB RMS sai a −15,0 ± 0,3 dB (a curva com limiar −18 e ratio 3); com detecção de pico, uma onda quadrada a −6 dBFS sai a −14,0 ± 0,3; abaixo do limiar, nada muda; o makeup soma o que diz.
+- **De-esser:** um 12 kHz forte cai ≥ 4 dB; 500 Hz e agudos baixos não mudam (±0,1 dB). A primeira versão, que separava os agudos subtraindo um passa-altas do sinal, só cortava 0,9 dB: a fase do filtro desfazia a separação. O crossover Linkwitz-Riley resolveu.
+- **Limitador:** um seno a +6 dBFS com picos de +12 dBFS sai sempre ≤ −1 dBFS, com o algoritmo sozinho (sem a trava final também passa); áudio baixo sai idêntico, só atrasado 240 amostras (5 ms). Mudar o lookahead remonta a cadeia com a latência nova.
+- **Todos os efeitos:** silêncio, ruído no volume máximo e silêncio de novo, sem NaN nem cauda depois do ruído. Os 4 presets do app carregam sem aviso e rodam.
+- **CPU (RNF-5):** os seis efeitos ligados, com o equalizador mexendo em 5 bandas: **0,49% de um núcleo** do Ryzen 5 5600G (`cargo test --release -- --ignored cpu`). O limite era 2%.
+- Os testes foram conferidos quebrando o código de propósito em 8 pontos (filtro sem velocidade limitada, gate sem histerese, limitador sem atraso, de-esser com a separação antiga, compressor sem a curva, cadeia sem remontar na latência, entre outros): todos falharam com o defeito.
 
 ## 13. Decisões em aberto
 

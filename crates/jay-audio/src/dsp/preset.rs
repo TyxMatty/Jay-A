@@ -8,6 +8,15 @@ use serde_json::{Map, Value, json};
 use super::chain::{ChainSpec, MAX_SLOTS, SlotSpec};
 use super::params::Scale;
 
+/// The presets that come with the app (id, JSON): the same format as the user's, so they are
+/// read the same way. Names are in English; the UI translates them.
+pub static BUILT_IN: &[(&str, &str)] = &[
+    ("clean-voice", include_str!("../../presets/clean-voice.json")),
+    ("podcast", include_str!("../../presets/podcast.json")),
+    ("noise-only", include_str!("../../presets/noise-only.json")),
+    ("radio", include_str!("../../presets/radio.json")),
+];
+
 pub const FORMAT: &str = "jay-a-preset";
 pub const VERSION: u64 = 1;
 /// Longer ids are refused (they end up in the UI and in file names of exports).
@@ -182,6 +191,29 @@ mod tests {
         let (read, warnings) = parse(&to_json(&preset)).unwrap();
         assert!(warnings.is_empty(), "{warnings:?}");
         assert_eq!(read, preset);
+    }
+
+    #[test]
+    fn the_built_in_presets_load_cleanly_and_run() {
+        use crate::dsp::FRAME;
+        use crate::dsp::chain::ChainControl;
+        assert_eq!(BUILT_IN.len(), 4);
+        for (id, text) in BUILT_IN {
+            let (preset, warnings) = parse(text).unwrap_or_else(|e| panic!("{id}: {e}"));
+            assert!(warnings.is_empty(), "{id}: {warnings:?}");
+            let mut runner = ChainControl::new(preset.chain).unwrap().runner();
+            let mut seed = 7u32;
+            for _ in 0..100 {
+                let mut frame: Vec<f32> = (0..FRAME)
+                    .map(|_| {
+                        seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                        ((seed >> 8) as f32 / (1u32 << 23) as f32 - 1.0) * 0.3
+                    })
+                    .collect();
+                runner.process(&mut frame);
+                assert!(frame.iter().all(|s| s.is_finite()), "{id} produced NaN or infinity");
+            }
+        }
     }
 
     #[test]

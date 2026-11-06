@@ -1,0 +1,14 @@
+{
+  "format": "jay-a-preset",
+  "version": 1,
+  "name": "Podcast",
+  "chain": ["filter#0", "gate#0", "eq#0", "compressor#0", "deesser#0"],
+  "effects": {
+    "filter#0": { "type": "highpass", "frequency": 90 },
+    "gate#0": { "open": -50, "hysteresis": 6, "hold": 250, "release": 120 },
+    "eq#0": { "band0Gain": 2, "band1Gain": -3, "band3Gain": 3, "band4Type": "highshelf", "band4Frequency": 8000, "band4Gain": 2 },
+    "compressor#0": { "threshold": -22, "ratio": 4, "attack": 5, "release": 100, "makeup": 5 },
+    "deesser#0": { "frequency": 6500, "threshold": -26, "ratio": 4 }
+  },
+  "webrtc": { "noiseSuppression": true, "autoGainControl": false }
+}

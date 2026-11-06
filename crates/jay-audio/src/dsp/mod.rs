@@ -3,6 +3,7 @@
 
 pub mod chain;
 pub mod effect;
+pub mod effects;
 pub mod params;
 pub mod preset;
 

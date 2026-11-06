@@ -39,9 +39,11 @@ impl std::fmt::Debug for EffectInfo {
     }
 }
 
-/// The effects users can pick. Stage 2b adds filter, gate, equalizer, compressor, de-esser and
-/// limiter here.
-static EFFECTS: &[EffectInfo] = &[];
+/// The effects users can pick, in the order the UI offers them.
+static EFFECTS: &[EffectInfo] = {
+    use super::effects::{compressor, deesser, eq, filter, gate, limiter};
+    &[filter::INFO, gate::INFO, eq::INFO, compressor::INFO, deesser::INFO, limiter::INFO]
+};
 
 pub fn find(kind: &str) -> Option<&'static EffectInfo> {
     EFFECTS.iter().chain(test_effects::EFFECTS).find(|e| e.kind == kind)

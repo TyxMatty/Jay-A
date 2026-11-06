@@ -36,8 +36,8 @@ impl SlotSpec {
         Some(SlotSpec { id: id.into(), info, values: COMMON.iter().chain(info.params).map(|p| p.default).collect() })
     }
 
-    /// The specs of `values`, in the same order.
-    pub fn specs(&self) -> impl Iterator<Item = &'static ParamSpec> {
+    /// The specs of `values`, in the same order (all static: the iterator doesn't borrow the slot).
+    pub fn specs(&self) -> impl Iterator<Item = &'static ParamSpec> + use<> {
         COMMON.iter().chain(self.info.params)
     }
 
@@ -167,6 +167,15 @@ impl Slot {
             ramp.settle();
         }
     }
+}
+
+/// The latency the effect would have with these values (off the audio thread: creates one).
+fn latency_of(spec: &SlotSpec) -> usize {
+    let mut effect = (spec.info.create)();
+    for (i, value) in spec.values[COMMON.len()..].iter().enumerate() {
+        effect.set_param(i, *value);
+    }
+    effect.latency()
 }
 
 /// Delays `samples` in place through the ring `line` (nothing when it's empty).
@@ -321,8 +330,14 @@ impl ChainControl {
         let spec = &mut self.spec.slots[slot];
         let param = spec.param_index(key).ok_or_else(|| format!("{slot_id} has no parameter {key}"))?;
         let value = spec.specs().nth(param).expect("index from param_index").clamp(value);
+        let latency = latency_of(spec);
         spec.values[param] = value;
-        self.send(Command::Set { slot, param, value })?;
+        if latency_of(spec) != latency {
+            // E.g. the limiter's lookahead: the chain's delays are sized when it's built.
+            self.set_chain(self.spec.clone())?;
+        } else {
+            self.send(Command::Set { slot, param, value })?;
+        }
         Ok(value)
     }
 
@@ -452,6 +467,19 @@ mod tests {
         assert_eq!(hits.len(), 1, "one impulse out: {hits:?}");
         assert_eq!(hits[0].0, 144);
         assert!((hits[0].1 - 1.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn a_parameter_that_changes_latency_rebuilds_the_chain() {
+        let mut control = ChainControl::new(chain(&["limiter"])).unwrap();
+        let mut runner = control.runner();
+        assert_eq!(runner.latency(), 240);
+        control.set_param("limiter#0", "lookahead", 10.0).unwrap();
+        runner.process(&mut sine(0));
+        assert_eq!(runner.latency(), 480, "the new chain is in");
+        control.set_param("limiter#0", "ceiling", -3.0).unwrap(); // no latency change: just a message
+        runner.process(&mut sine(1));
+        assert_eq!(runner.latency(), 480);
     }
 
     #[test]

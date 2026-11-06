@@ -1,0 +1,14 @@
+{
+  "format": "jay-a-preset",
+  "version": 1,
+  "name": "Clean voice",
+  "chain": ["filter#0", "gate#0", "eq#0", "compressor#0", "deesser#0"],
+  "effects": {
+    "filter#0": { "type": "highpass", "frequency": 80 },
+    "gate#0": { "open": -45, "hysteresis": 6, "hold": 300, "release": 150 },
+    "eq#0": { "band1Gain": -2, "band3Gain": 2 },
+    "compressor#0": { "threshold": -18, "ratio": 3, "attack": 10, "release": 120, "makeup": 2 },
+    "deesser#0": { "frequency": 6000, "threshold": -24, "ratio": 3 }
+  },
+  "webrtc": { "noiseSuppression": true, "autoGainControl": true }
+}
