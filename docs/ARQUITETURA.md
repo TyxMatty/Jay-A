@@ -112,9 +112,10 @@ Jay-A/
 │     ├─ mic.rs                  # microfone WASAPI + APM (etapa 1, do win.rs do Jay-C)
 │     ├─ monitor.rs              # "Ouvir meu microfone" (etapa 1)
 │     ├─ loopback.rs             # referência de eco: process loopback do Jay-C (etapa 3)
-│     ├─ dsp/                    # etapa 2: params.rs (ParamSpec), effect.rs (Effect + controles comuns),
-│     │                          # chain.rs (rack, troca sem lock), presets.rs; effects/ gate, filter, eq,
-│     │                          # compressor, deesser, limiter; etapa 7: denoise, pitch, robot, reverb
+│     ├─ dsp/                    # 2a ✅: params.rs (ParamSpec, controles comuns), effect.rs (Effect, lista
+│     │                          # de efeitos), chain.rs (rack, troca sem lock, crossfade), preset.rs (JSON);
+│     │                          # 2b: effects/ filter, gate, eq, compressor, deesser, limiter;
+│     │                          # 7: denoise, pitch, robot, reverb
 │     ├─ soundboard.rs           # biblioteca, vozes, mistura
 │     ├─ files/                  # decode.rs, encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
 │     └─ link.rs                 # servidor do Jay Link
@@ -491,7 +492,7 @@ Cada etapa termina com algo testável.
 |---|---|---|
 | 0 ✅ | Scaffold: Tauri v2 + Vite + Vanilla JS, ícones e estilos do Jay-C, bandeja, instância única, `--background` | `npm run dev` abre o Jay-A nos 3 estilos; fechar a janela deixa o ícone na bandeja |
 | 1 ✅ | Engine: microfone WASAPI (modo compartilhado) + APM (copiados do Jay-C), monitor e medidor | o teste de eco do Jay-C passa no `jay-audio`; o medidor mostra a voz; "Ouvir meu microfone" funciona |
-| 2a | Motor da cadeia: `ParamSpec`, `Effect` com os controles comuns, rack com troca sem lock e crossfade, presets JSON (S6) | testes: valores fora da faixa são clampados; preset com efeito desconhecido carrega com aviso; trocar a ordem 100 vezes durante um seno não estala (RNF-4); a latência somada bate com a informada |
+| 2a ✅ | Motor da cadeia: `ParamSpec`, `Effect` com os controles comuns, rack com troca sem lock e crossfade, presets JSON (S6) | testes: valores fora da faixa são clampados; preset com efeito desconhecido carrega com aviso; trocar a ordem 100 vezes durante um seno não estala (RNF-4); a latência somada bate com a informada |
 | 2b | Efeitos: filtro, gate (com histerese e hold), equalizador, compressor, de-esser e limitador; os 4 presets do app | cada efeito tem teste com sinal sintético (ex.: o passa-altas de 80 Hz tira ≥ 20 dB a 20 Hz; o gate fecha abaixo do limiar menos a histerese; o limitador nunca passa de −1 dBFS); CPU da cadeia inteira < 2% de um núcleo (RNF-5) |
 | 2c | Aba Filtros: a cadeia (adicionar, reordenar por arraste e por teclado, ligar/desligar), os parâmetros gerados do `ParamSpec`, os medidores por efeito, a latência total e os presets | pelo teclado, montar a cadeia do Voz limpa do zero; o que se ouve no "Ouvir meu microfone" muda na hora |
 | 3 | Servidor do Jay Link (S1, S2), junto com a I5 do Jay-C | o `jay_a_probe` do Jay-C passa; numa chamada, o outro lado ouve a voz filtrada pelo Jay-A; fechar o Jay-A não corta a voz (a reserva assume); o som de outros apps continua sem abafar (−7,8 dB, spike 09 do Jay-C) |
@@ -507,6 +508,16 @@ Cada etapa termina com algo testável.
 - **Monitor** (`cargo test -- --ignored`): um tom de 440 Hz a −29 dBFS empurrado no monitor sai na saída padrão a −35,2 dBFS, medido no loopback dela; antes, silêncio digital.
 - **No app, pela depuração remota:** a lista de microfones aparece, e o teste abre e fecha sem erro. Trocar de microfone, de supressão de ruído ou de ganho reabre o microfone na hora. Ligar e desligar o monitor durante o teste não dá erro. Fechar a janela para a bandeja encerra o teste.
 - **Não visto:** o medidor com uma voz de verdade. Neste PC, os microfones são todos virtuais e estavam mudos: o Voicemeeter estava fechado, o Iriun desligado e o Virtual Desktop sem headset. A captura é o código do Jay-C, já medido lá. Também não foi medido se o monitor estala.
+
+**Etapa 2a, medido (2026-11-06)** (`cargo test` no `crates/jay-audio`, com efeitos de teste: ganho, clipador e atraso):
+- **Reordenar 100 vezes durante um seno de 440 Hz:** o maior salto entre amostras vizinhas fica abaixo de 0,07; o próprio seno, sem troca, salta até 0,058. Sem o crossfade, salta 0,30.
+- **Ganho de entrada mudando 1 000 vezes por segundo** (−12 ↔ +12 dB): salto abaixo de 0,13; sem a rampa, 1,81.
+- **Ligar e desligar um efeito a cada quadro:** salto abaixo de 0,035; sem a rampa, 0,18.
+- **Latência:** dois atrasos (48 + 96 amostras, o segundo com mix 50%) somam 144, e o impulso sai uma vez só, na amostra 144. Sem atrasar o sinal seco, sairia duas vezes (48 e 144).
+- **Thread de áudio:** zero alocações e zero liberações em 200 quadros com mudanças de parâmetro e 20 trocas de cadeia, contadas por um alocador de teste. Com uma alocação de propósito, o teste falha.
+- **Presets:** efeito desconhecido, parâmetro desconhecido, valor fora da faixa, valor inválido, id repetido e id inválido carregam com aviso; formato errado, sem versão ou versão maior são recusados; salvar e ler de novo dá o mesmo; mais de 32 efeitos são cortados.
+- Cada teste foi conferido "quebrando" o código de propósito (os valores "sem ..." acima): todos falham com o defeito e passam sem ele.
+- **Ainda não ligado ao microfone:** a cadeia entra no caminho do áudio na 2c, junto com os comandos da tela. A 2b traz os efeitos de verdade.
 
 ## 13. Decisões em aberto
 

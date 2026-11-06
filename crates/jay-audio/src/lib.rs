@@ -1,10 +1,13 @@
 //! Jay-A's audio engine (docs/ARQUITETURA.md): 48 kHz f32, cleaned in 10 ms frames, delivered in
 //! 20 ms chunks. Stage 1: the microphone through WebRTC's audio processing, its level for the meter,
-//! and the monitor ("hear my microphone"). Windows only (WASAPI).
+//! and the monitor ("hear my microphone"); WASAPI, so Windows only. Stage 2: the effect chain
+//! (`dsp`), plain Rust on any platform.
 
 pub const SAMPLE_RATE: u32 = 48_000;
 /// 20 ms at 48 kHz: Opus frames, and the Jay Link's AUDIO blocks.
 pub const CHUNK_FRAMES: usize = 960;
+
+pub mod dsp;
 
 /// Jay-C's file as is (plugins/tauri-plugin-system-audio/src/apm.rs), so fixes copy over unchanged.
 #[cfg(windows)]

@@ -1746,6 +1746,7 @@ dependencies = [
  "cc",
  "log",
  "serde",
+ "serde_json",
  "wasapi",
 ]
 
