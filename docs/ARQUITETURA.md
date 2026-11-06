@@ -590,7 +590,7 @@ Cada etapa termina com algo testável.
 - **No app:** com o "Microfone (4- ME6S)", o medidor de entrada da remoção de ruído marcou 28% (o ruído da sala) e o de saída 0%. A cadeia do "Voz limpa" mostrou 45,0 ms de latência.
 - **Presets:** os quatro do app começam pela remoção de ruído (DeepFilterNet) e desligam a supressão do WebRTC. O "Só ruído" é só ela.
 - **Não visto:**
-  - **Tamanho do instalador:** não medido; o modelo tem 8 MB.
+  - **Tamanho do instalador:** medido na etapa 3: 11,9 MB, com o `jay-a.exe` de 24,5 MB (o modelo de 8 MB vai dentro).
   - **Qualidade com uma voz de verdade:** a avaliação usa voz sintética e cliques sintéticos; o veredito é o seu ouvido.
 - **Monitor, ponto aberto:** o teste manual do monitor (`cargo test -- --ignored`) passou a medir só a energia em 440 Hz (Goertzel), para não contar outros sons do PC. Numa segunda rodada, com outro som tocando no PC, o tom saiu a −50,8 dBFS na saída padrão, contra −35,2 na etapa 1, e o teste falhou. Um print temporário mostrou o monitor entregando 480 quadros a cada pedido do dispositivo, com o tom dentro, então a perda acontece depois, no Windows. Não foi confirmado onde: pode ser o Windows baixando o volume dos outros apps durante uma chamada, ou o volume do processo no mixer. Vale repetir com o PC em silêncio e sem chamada aberta.
 
@@ -600,6 +600,7 @@ Cada etapa termina com algo testável.
 - **Segurança do pipe:** lida pelo próprio teste, a DACL do pipe é `D:P(A;;FA;;;OW)`: protegida, com um único acesso, o do dono.
 - **`jay_a_probe` do Jay-C contra o app de dev, com o "Microfone (4- ME6S)" e a cadeia com DeepFilterNet:** PASS. Em 30 s chegaram 1 405 blocos; o intervalo entre eles ficou em p50 20,0 ms, p99 20,7 ms e máximo 22,0 ms, sem nenhum acima de 60 ms. O primeiro bloco chegou 1,9 s depois do `start-mic` na primeira abertura depois de o app subir; nas seguintes, de 130 a 240 ms (abrir o microfone leva ~180 ms). O Jay-C cobre essa espera com a reserva.
 - **Teste da tela durante o probe:** começar e parar o teste da aba Filtros com o Jay-C no microfone não o reabriu (intervalo máximo de 21,1 ms, PASS). O estado na tela passou de "não conectado" para "usando este microfone" e voltou quando o probe saiu.
+- **Versão instalada** (`npm run build`, instalador NSIS por usuário, 11,9 MB): instalou em `%LOCALAPPDATA%\Jay-A\jay-a.exe`. Com `--background`, a janela fica escondida e só o ícone aparece. O `jay_a_probe` passou: 1 491 blocos em 30 s, p99 20,4 ms, máximo 28,1 ms, primeiro bloco em 210 ms (79 ms na segunda vez).
 - **Referência de eco** (`cargo test -- --ignored echo`): um tom de 440 Hz a −26 dBFS tocado por um PowerShell filho chegou à captura daquele processo a −26,1 dBFS. No Jay-C aberto, o WebView2 achado foi o único `msedgewebview2.exe` filho do `jay-c.exe`.
 - **Não visto:**
   - **O eco sendo tirado numa chamada:** o probe não tem WebView2, então o cancelamento ficou desligado nele (a tela avisa). O teste de eco da etapa 1 mede o AEC; falta a chamada de verdade (I5).
