@@ -38,7 +38,6 @@ fn main() {
         // First plugin: a second launch exits at once; it shows the running Jay-A unless it's Jay-C's
         // --background start, which mustn't pop the window up in the middle of a call.
         .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
-            eprintln!("[debug] single-instance args: {args:?}");
             if !background(&args) {
                 show_main(app);
             }
