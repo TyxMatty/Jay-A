@@ -4,7 +4,6 @@
 // the changes. Reordering works by dragging the grip or with the arrow buttons (keyboard).
 import { h } from './dom.js';
 import { icons } from './icons.js';
-import { settings } from '../store/settings.js';
 import { t } from '../core/i18n.js';
 
 const SAMPLE_RATE = 48000;
@@ -146,10 +145,12 @@ function paramControl(spec, value, send, { label = paramLabel(spec.key), slider 
 // ---------- the editor ----------
 
 /**
- * @param {{ invoke: Function, applyWebrtc: (flags: { noiseSuppression?: boolean, autoGainControl?: boolean }) => void }} options
+ * @param {{ invoke: Function,
+ *   webrtcFlags: () => { noiseSuppression: boolean, autoGainControl: boolean },
+ *   applyWebrtc: (flags: { noiseSuppression?: boolean, autoGainControl?: boolean }) => void }} options
  * @returns {{ element: HTMLElement, setMeters: (effects: Array<[number, number]>) => void }}
  */
-export function createChainEditor({ invoke, applyWebrtc }) {
+export function createChainEditor({ invoke, webrtcFlags, applyWebrtc }) {
   let catalog = null; // { common: ParamSpec[], kinds: string[], byKind: { [kind]: ParamSpec[] } }
   let chain = { slots: [], latency: 0 };
   let presets = [];
@@ -221,8 +222,6 @@ export function createChainEditor({ invoke, applyWebrtc }) {
     saveForm.hidden = true;
     saveButton.focus();
   }
-  const webrtcFlags = () => ({ noiseSuppression: settings.get().noiseSuppression, autoGainControl: settings.get().autoGainControl });
-
   async function savePreset() {
     const name = nameInput.value.trim();
     if (!name) return nameInput.focus();

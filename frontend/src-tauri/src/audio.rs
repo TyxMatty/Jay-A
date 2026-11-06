@@ -1,26 +1,252 @@
-//! The Filters tab: the microphone test (stage 1) and the effect chain (stage 2c).
+//! The Filters tab and the Jay Link: the microphone (stage 1), the effect chain (stage 2c) and
+//! Jay-C (stage 3).
 //!
-//! One mic at a time; hiding the window to the tray closes it (main.rs), so the Windows microphone
-//! indicator doesn't stay on behind the user's back. The chain lives here between mic sessions and
-//! is saved to `chain.json` in the app's config folder after every change; user presets are files
-//! in `presets/` next to it. (Stage 3 moves the rest of the settings there: config.json.)
+//! One mic, open while someone uses it: the page's test or Jay-C (in a call), who share it. It is
+//! reopened only when its settings change or Jay-C starts or stops using it (the echo reference
+//! comes and goes with Jay-C). Hiding the window to the tray ends the test (main.rs), so the
+//! Windows microphone indicator doesn't stay on behind the user's back, unless Jay-C uses the mic.
+//!
+//! Saved in the app's config folder: the mic's settings in `config.json`, the chain in
+//! `chain.json` (after every change), user presets as files in `presets/`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::Mutex;
 use std::sync::mpsc::sync_channel;
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use jay_audio::dsp::chain::{ChainControl, ChainSpec};
 use jay_audio::dsp::params::COMMON;
 use jay_audio::dsp::{Meters, effect, output_limiter, preset};
+use jay_audio::link::{LinkEvent, LinkServer, PIPE};
 use jay_audio::{Mic, MicDevice, MicOptions};
 use serde_json::{Value, json};
-use tauri::State;
 use tauri::ipc::Channel;
+use tauri::{AppHandle, Emitter, Manager, State};
+
+pub struct MicState {
+    engine: Mutex<Engine>,
+    config: PathBuf,
+}
 
 #[derive(Default)]
-pub struct MicState(pub Mutex<Option<Mic>>);
+struct Engine {
+    options: MicOptions,
+    /// No config.json yet: the first Jay-C to connect may bring the user's settings (`import`).
+    fresh: bool,
+    mic: Option<Mic>,
+    /// What `mic` was opened with: its options and Jay-C's process (the echo reference).
+    opened: Option<(MicOptions, Option<u32>)>,
+    /// The page's test, where its meters and errors go; none = no test.
+    page: Arc<Mutex<Option<Channel<Value>>>>,
+    /// "Hear my microphone", during the test only.
+    monitor: bool,
+    link: Option<LinkServer>,
+    jay_c: Option<JayC>,
+}
+
+/// The Jay-C connected now.
+struct JayC {
+    pid: u32,
+    version: String,
+    wants_mic: bool,
+    in_call: bool,
+    muted: bool,
+}
+
+impl MicState {
+    pub fn load(config_dir: &Path) -> MicState {
+        let config = config_dir.join("config.json");
+        let saved = fs::read_to_string(&config).ok();
+        let options = saved
+            .as_deref()
+            .and_then(|text| serde_json::from_str::<Value>(text).ok())
+            .and_then(|v| serde_json::from_value(v["mic"].clone()).ok())
+            .unwrap_or_default();
+        MicState { engine: Mutex::new(Engine { options, fresh: saved.is_none(), ..Engine::default() }), config }
+    }
+
+    fn lock(&self) -> Result<MutexGuard<'_, Engine>, String> {
+        self.engine.lock().map_err(|e| e.to_string())
+    }
+
+    fn save(&self, engine: &mut Engine, options: MicOptions) -> Result<(), String> {
+        write(&self.config, &serde_json::to_string_pretty(&json!({ "mic": options })).map_err(|e| e.to_string())?)?;
+        engine.options = options;
+        engine.fresh = false;
+        Ok(())
+    }
+
+    /// The window went to the tray: the test ends (Jay-C keeps the mic if it uses it). True if a
+    /// test was running.
+    pub fn stop_test(&self, chain: &ChainState) -> bool {
+        let Ok(mut engine) = self.lock() else { return false };
+        let was = engine.page.lock().unwrap().take().is_some();
+        engine.monitor = false;
+        let _ = engine.sync(chain);
+        was
+    }
+}
+
+impl Engine {
+    /// Opens, reopens or closes the mic for whoever uses it now.
+    fn sync(&mut self, chain: &ChainState) -> Result<(), String> {
+        let testing = self.page.lock().unwrap().is_some();
+        let jay_c = self.jay_c.as_ref().filter(|j| j.wants_mic).map(|j| j.pid);
+        let wanted = (testing || jay_c.is_some()).then(|| (self.options.clone(), jay_c));
+        if self.opened != wanted {
+            self.mic = None;
+            self.opened = None;
+            if let Some((options, echo_of)) = wanted.clone() {
+                let mic = self.open(options, echo_of, chain)?;
+                if let Some(link) = &self.link {
+                    // Jay-C's reserve follows the mic we use.
+                    link.set_state(json!({ "type": "state", "device": mic.device, "deviceId": mic.device_id, "preset": null }));
+                }
+                self.mic = Some(mic);
+                self.opened = wanted;
+            }
+        }
+        match &self.mic {
+            Some(mic) => mic.set_monitor(testing && self.monitor),
+            None => Ok(()),
+        }
+    }
+
+    fn open(&self, options: MicOptions, echo_of: Option<u32>, chain: &ChainState) -> Result<Mic, String> {
+        let runner = chain.lock()?.runner();
+        // The audio thread hands its meters over without allocating; this thread makes the JSON for
+        // the page's test, keeping the loudest values between two sends. It ends with the mic.
+        let (meters_tx, meters_rx) = sync_channel::<Meters>(8);
+        let page = self.page.clone();
+        std::thread::Builder::new()
+            .name("jay-a-meters".into())
+            .spawn(move || {
+                let mut loudest: Option<Meters> = None;
+                let mut sent = Instant::now();
+                while let Ok(m) = meters_rx.recv() {
+                    let l = loudest.get_or_insert(m);
+                    l.level = l.level.max(m.level);
+                    l.count = m.count;
+                    for (a, b) in l.effects.iter_mut().zip(m.effects).take(m.count) {
+                        *a = (a.0.max(b.0), a.1.max(b.1));
+                    }
+                    if sent.elapsed() >= METERS_EVERY {
+                        sent = Instant::now();
+                        let l = loudest.take().expect("just set");
+                        if let Some(page) = page.lock().unwrap().as_ref() {
+                            // JSON has no -inf: digital silence is sent as -120 dB.
+                            let effects: Vec<[f32; 2]> = l.effects[..l.count].iter().map(|&(i, o)| [i, o]).collect();
+                            let _ = page.send(json!({ "level": l.level.max(-120.0), "effects": effects }));
+                        }
+                    }
+                }
+            })
+            .map_err(|e| e.to_string())?;
+
+        let link = self.link.as_ref().map(LinkServer::audio);
+        let page = self.page.clone();
+        // shortcut: a mic that fails mid-call only tells the page; Jay-C notices the missing AUDIO
+        // and stays on its reserve until it reconnects. Reopen here if that turns out to matter.
+        Mic::start(
+            options,
+            echo_of,
+            runner,
+            move |chunk, m| {
+                if let Some(link) = &link {
+                    link.push(chunk); // dropped unless Jay-C asked for the mic
+                }
+                let _ = meters_tx.try_send(*m); // full: the page just misses one
+            },
+            move |error| {
+                if let Some(page) = page.lock().unwrap().as_ref() {
+                    let _ = page.send(json!({ "error": error }));
+                }
+            },
+        )
+    }
+
+    /// What the page shows about Jay-C.
+    fn link_state(&self) -> Value {
+        match &self.jay_c {
+            None => json!({ "connected": false }),
+            Some(j) => json!({
+                "connected": true,
+                "version": j.version,
+                "usingMic": j.wants_mic,
+                "inCall": j.in_call,
+                "muted": j.muted,
+                "echoCancellation": j.wants_mic && self.mic.as_ref().is_some_and(|m| m.echo_cancellation),
+            }),
+        }
+    }
+}
+
+/// Jay-C's settings from its HELLO (`{ micDevice, micProcessing: { noiseSuppression,
+/// autoGainControl }, ... }`). Its gain and gate stay out: the chain has its own.
+fn import(options: &mut MicOptions, from: &Value) {
+    if let Some(device) = from["micDevice"].as_str() {
+        options.device = Some(device.to_string());
+    }
+    let processing = &from["micProcessing"];
+    if let Some(on) = processing["noiseSuppression"].as_bool() {
+        options.noise_suppression = on;
+    }
+    if let Some(on) = processing["autoGainControl"].as_bool() {
+        options.auto_gain_control = on;
+    }
+}
+
+/// Starts the Jay Link server; without it (the pipe is taken), Jay-A runs alone.
+pub fn start_link(app: &AppHandle) {
+    let handle = app.clone();
+    let version = app.package_info().version.to_string();
+    match LinkServer::start(PIPE, &version, move |event| on_link(&handle, event)) {
+        Ok(server) => {
+            if let Ok(mut engine) = app.state::<MicState>().lock() {
+                engine.link = Some(server);
+            }
+        }
+        Err(e) => eprintln!("Jay Link: {e}"),
+    }
+}
+
+fn on_link(app: &AppHandle, event: LinkEvent) {
+    let (mic, chain) = (app.state::<MicState>(), app.state::<ChainState>());
+    let Ok(mut engine) = mic.lock() else { return };
+    match event {
+        LinkEvent::Connected { pid, version, import: from } => {
+            if engine.fresh
+                && let Some(from) = from
+            {
+                let mut options = engine.options.clone();
+                import(&mut options, &from);
+                if mic.save(&mut engine, options.clone()).is_ok() {
+                    let _ = app.emit("mic-options", options);
+                }
+            }
+            engine.jay_c = Some(JayC { pid, version, wants_mic: false, in_call: false, muted: false });
+        }
+        LinkEvent::StartMic | LinkEvent::StopMic => {
+            if let Some(j) = engine.jay_c.as_mut() {
+                j.wants_mic = event == LinkEvent::StartMic;
+            }
+        }
+        LinkEvent::CallState { in_call, muted } => {
+            if let Some(j) = engine.jay_c.as_mut() {
+                (j.in_call, j.muted) = (in_call, muted);
+            }
+        }
+        LinkEvent::Show => crate::show_main(app),
+        LinkEvent::Disconnected => engine.jay_c = None,
+    }
+    if let Err(error) = engine.sync(&chain)
+        && let Some(link) = &engine.link
+    {
+        link.send(json!({ "type": "error", "message": error }));
+    }
+    let _ = app.emit("link-state", engine.link_state());
+}
 
 pub struct ChainState {
     control: Mutex<ChainControl>,
@@ -77,75 +303,54 @@ pub async fn list_mics() -> Result<Vec<MicDevice>, String> {
     jay_audio::list_mics()
 }
 
-/// Opens the mic with the chain on it (replacing a running one, e.g. with new options) and returns
-/// its name. `on_event` gets `{ level, effects: [[in, out], ...] }` (dBFS RMS; linear peaks)
-/// about 20 times a second, and `{ error }` if the mic fails later.
+/// The mic's settings (config.json).
 #[tauri::command(async)]
-pub fn start_mic(
-    mic: State<'_, MicState>,
-    chain: State<'_, ChainState>,
-    options: MicOptions,
-    monitor: bool,
-    on_event: Channel<Value>,
-) -> Result<String, String> {
-    let mut current = mic.0.lock().map_err(|e| e.to_string())?;
-    current.take();
-    let runner = chain.lock()?.runner();
+pub fn mic_options(mic: State<'_, MicState>) -> Result<MicOptions, String> {
+    Ok(mic.lock()?.options.clone())
+}
 
-    // The audio thread hands its meters over without allocating; this thread makes the JSON,
-    // keeping the loudest values between two sends. It ends with the mic.
-    let (meters_tx, meters_rx) = sync_channel::<Meters>(8);
-    let page = on_event.clone();
-    std::thread::Builder::new()
-        .name("jay-a-meters".into())
-        .spawn(move || {
-            let mut loudest: Option<Meters> = None;
-            let mut sent = Instant::now();
-            while let Ok(m) = meters_rx.recv() {
-                let l = loudest.get_or_insert(m);
-                l.level = l.level.max(m.level);
-                l.count = m.count;
-                for (a, b) in l.effects.iter_mut().zip(m.effects).take(m.count) {
-                    *a = (a.0.max(b.0), a.1.max(b.1));
-                }
-                if sent.elapsed() >= METERS_EVERY {
-                    sent = Instant::now();
-                    let l = loudest.take().expect("just set");
-                    // JSON has no -inf: digital silence is sent as -120 dB.
-                    let effects: Vec<[f32; 2]> = l.effects[..l.count].iter().map(|&(i, o)| [i, o]).collect();
-                    let _ = page.send(json!({ "level": l.level.max(-120.0), "effects": effects }));
-                }
-            }
-        })
-        .map_err(|e| e.to_string())?;
+/// Saves the mic's settings and reopens it with them if it's open (the test, or Jay-C's call).
+#[tauri::command(async)]
+pub fn set_mic_options(mic: State<'_, MicState>, chain: State<'_, ChainState>, options: MicOptions) -> Result<(), String> {
+    let mut engine = mic.lock()?;
+    mic.save(&mut engine, options)?;
+    engine.sync(&chain)
+}
 
-    let errors = on_event;
-    let mic = Mic::start(
-        options,
-        runner,
-        move |m| {
-            let _ = meters_tx.try_send(*m); // full: the page just misses one
-        },
-        move |error| drop(errors.send(json!({ "error": error }))),
-    )?;
-    mic.set_monitor(monitor)?;
-    let device = mic.device.clone();
-    *current = Some(mic);
-    Ok(device)
+/// The page's test: opens the mic (or joins Jay-C on it) and returns its name. `on_event` gets
+/// `{ level, effects: [[in, out], ...] }` (dBFS RMS; linear peaks) about 20 times a second, and
+/// `{ error }` if the mic fails later.
+#[tauri::command(async)]
+pub fn start_mic(mic: State<'_, MicState>, chain: State<'_, ChainState>, monitor: bool, on_event: Channel<Value>) -> Result<String, String> {
+    let mut engine = mic.lock()?;
+    *engine.page.lock().unwrap() = Some(on_event);
+    engine.monitor = monitor;
+    if let Err(error) = engine.sync(&chain) {
+        engine.page.lock().unwrap().take();
+        let _ = engine.sync(&chain);
+        return Err(error);
+    }
+    Ok(engine.mic.as_ref().map(|m| m.device.clone()).unwrap_or_default())
 }
 
 #[tauri::command(async)]
-pub fn stop_mic(mic: State<'_, MicState>) -> Result<(), String> {
-    mic.0.lock().map_err(|e| e.to_string())?.take();
+pub fn stop_mic(mic: State<'_, MicState>, chain: State<'_, ChainState>) -> Result<(), String> {
+    mic.stop_test(&chain);
     Ok(())
 }
 
 #[tauri::command(async)]
-pub fn set_monitor(mic: State<'_, MicState>, on: bool) -> Result<(), String> {
-    match mic.0.lock().map_err(|e| e.to_string())?.as_ref() {
-        Some(mic) => mic.set_monitor(on),
-        None => Ok(()),
-    }
+pub fn set_monitor(mic: State<'_, MicState>, chain: State<'_, ChainState>, on: bool) -> Result<(), String> {
+    let mut engine = mic.lock()?;
+    engine.monitor = on;
+    engine.sync(&chain)
+}
+
+/// `{ connected, version?, usingMic?, inCall?, muted?, echoCancellation? }`; the `link-state`
+/// event brings the changes.
+#[tauri::command(async)]
+pub fn link_state(mic: State<'_, MicState>) -> Result<Value, String> {
+    Ok(mic.lock()?.link_state())
 }
 
 /// The controls every effect has and each effect's own, for the page to build its controls.
@@ -289,7 +494,22 @@ fn file_id(name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::file_id;
+    use super::{MicOptions, file_id, import};
+    use serde_json::json;
+
+    #[test]
+    fn jay_c_settings_are_imported() {
+        // What Jay-C's call.js sends as `jayAImport`.
+        let from = json!({ "micDevice": "{0.0.1.00000000}.{abc}", "micGain": 1.5, "micGate": -50,
+            "micProcessing": { "echoCancellation": true, "noiseSuppression": false, "autoGainControl": true } });
+        let mut options = MicOptions::default();
+        import(&mut options, &from);
+        assert_eq!(options, MicOptions { device: Some("{0.0.1.00000000}.{abc}".into()), noise_suppression: false, auto_gain_control: true });
+        // The Windows default and missing fields keep what's there.
+        let mut options = MicOptions { device: None, noise_suppression: false, auto_gain_control: false };
+        import(&mut options, &json!({ "micDevice": null }));
+        assert_eq!(options, MicOptions { device: None, noise_suppression: false, auto_gain_control: false });
+    }
 
     #[test]
     fn preset_file_names_are_safe() {

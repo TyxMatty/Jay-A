@@ -5,6 +5,9 @@
 //!
 //! The capture thread is the audio thread: after the start it allocates nothing and never waits
 //! on a lock (RNF-3).
+//!
+//! While Jay-C uses the mic, what Jay-C plays is the echo reference (echo.rs), and WebRTC's echo
+//! canceller runs.
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,13 +19,13 @@ use wasapi::{AudioCaptureClient, AudioClient, DeviceEnumerator, Direction, Handl
 
 use crate::apm::Apm;
 use crate::dsp::chain::{ChainRunner, MAX_SLOTS};
+use crate::echo::{EchoReference, Played, webview_of};
 use crate::dsp::{Meters, output_limiter};
 use crate::monitor::Monitor;
 use crate::{CHUNK_FRAMES, SAMPLE_RATE, level_db};
 
-/// The microphone's cleanup. Echo cancellation isn't here yet: it needs the Jay Link (stage 3),
-/// which brings what Jay-C plays as the echo reference.
-#[derive(Debug, Clone, Deserialize)]
+/// The microphone and its WebRTC cleanup (echo cancellation comes with Jay-C: see `Mic::start`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MicOptions {
     /// Remove steady background noise (fans, hum). Off is better for music.
@@ -40,6 +43,12 @@ fn yes() -> bool {
     true
 }
 
+impl Default for MicOptions {
+    fn default() -> Self {
+        MicOptions { noise_suppression: true, auto_gain_control: true, device: None }
+    }
+}
+
 /// A microphone the user can pick. `id` is the WASAPI endpoint id, the same one Jay-C uses.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,8 +63,12 @@ pub struct Mic {
     stop: Arc<AtomicBool>,
     thread: Option<JoinHandle<()>>,
     monitor: Arc<Mutex<Option<Monitor>>>,
-    /// The open microphone's name.
+    _echo: Option<EchoReference>,
+    /// The open microphone's name and endpoint id (the default's when the chosen one is missing).
     pub device: String,
+    pub device_id: String,
+    /// Echo cancellation runs (Jay-C's WebView2 was found and is being captured).
+    pub echo_cancellation: bool,
 }
 
 impl Drop for Mic {
@@ -69,15 +82,25 @@ impl Drop for Mic {
 }
 
 impl Mic {
-    /// Opens the mic, running `chain` on it. `on_meters` gets the levels every 20 ms, on the audio
-    /// thread (it must not allocate or wait: e.g. `try_send` to another thread); `on_error` a
-    /// failure after the start (e.g. the mic was unplugged; the capture then ends).
+    /// Opens the mic, running `chain` on it. `echo_of`: Jay-C's process, while Jay-C uses the mic;
+    /// what its WebView2 plays is then removed from the mic. `on_chunk` gets each 20 ms chunk and
+    /// the levels, on the audio thread (it must not allocate or wait: e.g. `try_send` to another
+    /// thread); `on_error` a failure after the start (e.g. the mic was unplugged; the capture ends).
     pub fn start(
         options: MicOptions,
+        echo_of: Option<u32>,
         chain: ChainRunner,
-        on_meters: impl FnMut(&Meters) + Send + 'static,
+        on_chunk: impl FnMut(&[f32; CHUNK_FRAMES], &Meters) + Send + 'static,
         on_error: impl Fn(String) + Send + 'static,
     ) -> Result<Mic, String> {
+        let echo = echo_of.and_then(|pid| {
+            let Some(root) = webview_of(pid) else {
+                log::warn!("no WebView2 under process {pid}: echo cancellation stays off");
+                return None;
+            };
+            EchoReference::start(root).inspect_err(|e| log::warn!("echo reference: {e}")).ok()
+        });
+        let played = echo.as_ref().map(|e| e.played.clone());
         let stop = Arc::new(AtomicBool::new(false));
         let monitor: Arc<Mutex<Option<Monitor>>> = Arc::default();
         let (ready_tx, ready_rx) = mpsc::channel();
@@ -85,11 +108,13 @@ impl Mic {
             .name("jay-audio-mic".into())
             .spawn({
                 let (stop, monitor) = (stop.clone(), monitor.clone());
-                move || run_mic(options, chain, &stop, &monitor, ready_tx, on_meters, on_error)
+                move || run_mic(options, played, chain, &stop, &monitor, ready_tx, on_chunk, on_error)
             })
             .map_err(|e| e.to_string())?;
         match ready_rx.recv() {
-            Ok(Ok(device)) => Ok(Mic { stop, thread: Some(thread), monitor, device }),
+            Ok(Ok((device, device_id))) => {
+                Ok(Mic { stop, thread: Some(thread), monitor, echo_cancellation: echo.is_some(), _echo: echo, device, device_id })
+            }
             Ok(Err(error)) => Err(error),
             Err(_) => Err("microphone thread exited during start".into()),
         }
@@ -127,7 +152,8 @@ pub fn list_mics() -> Result<Vec<MicDevice>, String> {
     Ok(mics)
 }
 
-type OpenMic = (String, AudioClient, AudioCaptureClient, Handle);
+/// Name, endpoint id and the started stream.
+type OpenMic = (String, String, AudioClient, AudioCaptureClient, Handle);
 
 /// Opens `device` (an endpoint id), or the default microphone when it's none or can't be opened
 /// (unplugged, disabled).
@@ -145,6 +171,7 @@ fn open_mic(device: Option<&str>) -> Result<OpenMic, String> {
 
 fn open_device(device: wasapi::Device) -> Result<OpenMic, String> {
     let name = device.get_friendlyname().unwrap_or_default();
+    let id = device.get_id().unwrap_or_default();
     let mut client = device.get_iaudioclient().map_err(|e| e.to_string())?;
     let format = WaveFormat::new(32, 32, &SampleType::Float, SAMPLE_RATE as usize, 1, None);
     client
@@ -153,37 +180,39 @@ fn open_device(device: wasapi::Device) -> Result<OpenMic, String> {
     let event = client.set_get_eventhandle().map_err(|e| e.to_string())?;
     let capture = client.get_audiocaptureclient().map_err(|e| e.to_string())?;
     client.start_stream().map_err(|e| e.to_string())?;
-    Ok((name, client, capture, event))
+    Ok((name, id, client, capture, event))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn run_mic(
     options: MicOptions,
+    played: Option<Played>,
     mut chain: ChainRunner,
     stop: &AtomicBool,
     monitor: &Mutex<Option<Monitor>>,
-    ready: mpsc::Sender<Result<String, String>>,
-    mut on_meters: impl FnMut(&Meters),
+    ready: mpsc::Sender<Result<(String, String), String>>,
+    mut on_chunk: impl FnMut(&[f32; CHUNK_FRAMES], &Meters),
     on_error: impl Fn(String),
 ) {
     if let Err(e) = initialize_mta().ok() {
         let _ = ready.send(Err(e.to_string()));
         return;
     }
-    let (name, client, capture, event) = match open_mic(options.device.as_deref()) {
+    let (name, id, client, capture, event) = match open_mic(options.device.as_deref()) {
         Ok(mic) => mic,
         Err(error) => {
             let _ = ready.send(Err(error));
             return;
         }
     };
-    // No echo reference before the Jay Link, so echo cancellation stays off.
-    let Some(mut apm) = Apm::new(SAMPLE_RATE, 1, 1, false, options.noise_suppression, options.auto_gain_control) else {
+    let Some(mut apm) = Apm::new(SAMPLE_RATE, 1, 1, played.is_some(), options.noise_suppression, options.auto_gain_control) else {
         let _ = ready.send(Err("couldn't start audio processing".into()));
         return;
     };
-    let _ = ready.send(Ok(name));
+    let _ = ready.send(Ok((name, id)));
 
     let frame = apm.capture_frame_len();
+    let mut render = vec![0.0f32; apm.render_frame_len()];
     let mut limiter = output_limiter();
     // Everything the loop needs, allocated now: a second of room in each queue.
     let mut raw: VecDeque<u8> = VecDeque::with_capacity(SAMPLE_RATE as usize * 4);
@@ -219,10 +248,23 @@ fn run_mic(
         drop(bytes);
 
         while pending.len() >= frame {
+            // The echo canceller first gets everything Jay-C played since the last frame. A busy
+            // lock (the reference thread adding to it) just leaves it for the next frame.
+            if let Some(played) = &played
+                && let Ok(mut queue) = played.try_lock()
+            {
+                let n = render.len();
+                while queue.len() >= n {
+                    for (r, p) in render.iter_mut().zip(queue.drain(..n)) {
+                        *r = p;
+                    }
+                    apm.process_render(&render);
+                }
+            }
             for (s, p) in samples.iter_mut().zip(pending.drain(..frame)) {
                 *s = p;
             }
-            apm.process_capture(&mut samples, 0);
+            apm.process_capture(&mut samples, 0); // AEC3 estimates the speaker->mic delay itself
             chain.process(&mut samples);
             limiter.process(&mut samples);
             chunk[filled..filled + frame].copy_from_slice(&samples);
@@ -241,7 +283,7 @@ fn run_mic(
                     *slot = peaks;
                     meters.count += 1;
                 }
-                on_meters(&meters);
+                on_chunk(&chunk, &meters);
             }
         }
     }

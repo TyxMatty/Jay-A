@@ -93,7 +93,7 @@ flowchart LR
 | Por que não ffmpeg | — | Um ffmpeg completo tem ~80–130 MB, e a linha Jay é leve (o Jay-C tem 3,9 MB). E os efeitos dos arquivos seriam filtros do ffmpeg, diferentes dos do microfone: duas implementações. Com o engine próprio, **a mesma cadeia de filtros serve ao vivo e nos arquivos**. |
 | Atalhos globais | `tauri-plugin-global-shortcut` | Tocar o soundboard com um jogo em foco. |
 | Bandeja e instância única | `tray-icon` do Tauri + `tauri-plugin-single-instance` | O Jay-C pode iniciar o Jay-A sem abrir um segundo engine. |
-| Persistência | **`config.json`** na pasta de configuração do app, lido pelo engine | O engine precisa dos filtros mesmo com a janela fechada, então a configuração não pode ficar no `localStorage` da página (como no Jay-C). A UI lê e grava por comandos. Desde a 2c, a cadeia já fica no motor (`chain.json`, e os presets do usuário em `presets/`); as opções do microfone (dispositivo, supressão de ruído, ganho automático) seguem no `localStorage` até a etapa 3. |
+| Persistência | **`config.json`** na pasta de configuração do app, lido pelo engine | O engine precisa dos filtros mesmo com a janela fechada, então a configuração não pode ficar no `localStorage` da página (como no Jay-C). A UI lê e grava por comandos. A cadeia fica no `chain.json` (desde a 2c) e os presets do usuário em `presets/`; as opções do microfone (dispositivo, supressão de ruído, ganho automático) foram para o `config.json` na etapa 3. No `localStorage` ficam só as preferências da UI e o "Ouvir meu microfone". |
 | Formato interno | 48 kHz, f32, quadros de 10 ms (480 amostras) | É o quadro do APM e do RNNoise. O link entrega blocos de 20 ms, como o microfone nativo do Jay-C hoje. |
 
 ## 3. Estrutura do repositório
@@ -112,7 +112,7 @@ Jay-A/
 │     ├─ apm.rs                  # igual ao do Jay-C (com o teste de eco)
 │     ├─ mic.rs                  # microfone WASAPI + APM (etapa 1, do win.rs do Jay-C)
 │     ├─ monitor.rs              # "Ouvir meu microfone" (etapa 1)
-│     ├─ loopback.rs             # referência de eco: process loopback do Jay-C (etapa 3)
+│     ├─ echo.rs                 # 3 ✅: referência de eco, process loopback do WebView2 do Jay-C
 │     ├─ dsp/                    # 2a ✅: params.rs (ParamSpec, controles comuns), effect.rs (Effect, lista
 │     │                          # de efeitos), chain.rs (rack, troca sem lock, crossfade), preset.rs (JSON);
 │     │                          # 2b ✅: effects/ biquad, filter, eq, gate, compressor, deesser, limiter;
@@ -120,7 +120,7 @@ Jay-A/
 │     ├─ presets/                # os presets que vêm com o app (clean-voice, podcast, noise-only, radio)
 │     ├─ soundboard.rs           # biblioteca, vozes, mistura
 │     ├─ files/                  # decode.rs, encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
-│     └─ link.rs                 # servidor do Jay Link
+│     └─ link.rs                 # 3 ✅: servidor do Jay Link (pipe, protocolo, segurança)
 ├─ scripts/                      # dev-debug.ps1 (app com depuração na porta 9224) e cdp-eval.mjs (roda JS no app), do Jay-C;
 │                                # make-speech.ps1 (fala com as vozes do Windows, para avaliar a remoção de ruído)
 └─ frontend/
@@ -189,7 +189,8 @@ flowchart LR
 - **O WebRTC APM fica sempre na frente:** o cancelamento de eco precisa do sinal do microfone sem nenhum efeito antes, para o filtro adaptativo achar o eco. O EasyEffects deixa o echo canceller em qualquer posição; aqui ele não sai do lugar.
 - **O limitador fica sempre no fim:** voz mais soundboard nunca passam de −1 dBFS, nem com um preset ruim.
 - **Referência de eco:** a mesma técnica do Jay-C hoje (process loopback da árvore do `msedgewebview2.exe` filho do Jay-C), só que aberta de outro processo. O Jay-A acha essa árvore pelo PID de quem conectou no pipe (`GetNamedPipeClientProcessId`), sem confiar num PID mandado na mensagem. Spike S2.
-- **O monitor entra na referência:** o soundboard tocado nos fones/alto-falantes pode voltar pelo microfone. Somando o que o Jay-A toca à referência, o AEC tira esse retorno e os outros não ouvem o clipe duas vezes.
+- **O monitor do soundboard entra na referência (etapa 4):** o soundboard tocado nos fones/alto-falantes pode voltar pelo microfone. Somando o que o Jay-A toca à referência, o AEC tira esse retorno e os outros não ouvem o clipe duas vezes.
+- **O "Ouvir meu microfone" fica fora da referência:** ele é a própria voz, e o AEC a tiraria do microfone. Por isso a referência é a árvore do WebView2 do Jay-C, e não a do Jay-C inteiro: um Jay-A iniciado pelo Jay-C é filho dele, e o som do Jay-A entraria junto.
 - **O soundboard entra depois da cadeia:** antes dela, a supressão trataria música como ruído e o gate cortaria clipes baixos. Ele só passa pelo limitador.
 - **Ouvir meu microfone:** manda a saída para os fones, para ajustar os filtros. Só com fones: nos alto-falantes, vira microfonia (aviso na UI).
 
@@ -353,7 +354,7 @@ Quadro: `opcode` (u32 LE) + `tamanho` (u32 LE) + dados. Controle em JSON; áudio
 | 2 `AUDIO` | A → C | 960 × f32 LE (20 ms, mono, 48 kHz) = 3 840 bytes, **a cada 20 ms** enquanto o microfone está ligado, também em silêncio. O Jay-C fecha o link se o tamanho for outro e troca NaN/infinito por 0 |
 | 3 `PING` / 4 `PONG` | os dois | — (a cada 5 s; sem resposta em 10 s = pipe morto) |
 
-- **`import`:** na primeira conexão, se o Jay-A ainda não tem configuração, ele adota o microfone, o volume, o gate e os filtros que a pessoa já tinha ajustado no Jay-C.
+- **`import`:** na primeira conexão, se o Jay-A ainda não tem `config.json`, ele adota o microfone, a supressão de ruído e o ganho automático que a pessoa já usava no Jay-C. O volume (`micGain`) e o gate (`micGate`) do Jay-C ficam de fora: a cadeia tem os seus (ganho de entrada e o efeito gate), e um gate do Jay-C somado ao preset cortaria a voz duas vezes.
 - **Versão:** `protocol` diferente → o Jay-A responde `{ error }`, e o Jay-C vai para a reserva com o aviso "Atualize o Jay-A".
 - **Mudo:** mutar no Jay-C pausa o producer, então o soundboard também fica mudo na chamada (D2). O `call-state` serve só para a UI do Jay-A mostrar "mutado no Jay-C".
 
@@ -380,6 +381,16 @@ O cliente está em `plugins/tauri-plugin-system-audio/src/link.rs` do JayC (comm
 - **atender o próximo cliente depois que um sai**: o Jay-C reconecta quando troca de microfone ou entra de novo numa chamada. Com `FILE_FLAG_FIRST_PIPE_INSTANCE`, criar a instância nova com a antiga ainda aberta falha, e o servidor para de aceitar conexões. Então: **fechar a instância antiga antes de criar a próxima** (a janela sem pipe é coberta pelo Jay-C, que tenta de novo a cada 5 s), ou reusar a mesma com `DisconnectNamedPipe` + `ConnectNamedPipe`, cancelando antes a leitura pendente. O Jay-C caiu nessa armadilha no próprio Jay-A falso e a cobre com o teste `link::tests::the_fake_serves_the_next_client_after_one_leaves` (conecta e desconecta 3 vezes); o servidor do Jay-A precisa de um teste igual.
 
 **Ordem dos `CONTROL` que o Jay-C manda** (medido pela sessão do Jay-C no app de verdade): `{ type: "start-mic" }`, depois `{ type: "call-state", inCall: true, muted: false }`, que é o último estado guardado, reenviado a cada reconexão, e depois um `call-state` a cada vez que o mudo muda.
+
+### O servidor no Jay-A (etapa 3)
+
+- **Onde:** `crates/jay-audio/src/link.rs` (pipe, quadros e protocolo) e `frontend/src-tauri/src/audio.rs` (o que cada mensagem faz).
+- **Um microfone, dois usuários:** o teste da aba Filtros e o Jay-C usam o mesmo microfone aberto. Ele só é reaberto quando as opções mudam ou quando o Jay-C começa ou para de usá-lo, porque a referência de eco vem e vai com o Jay-C. Começar ou parar o teste durante uma chamada não mexe no microfone.
+- **Fechar a janela** encerra só o teste da tela. Com o Jay-C usando o microfone, ele continua aberto.
+- **`state`:** vai depois de cada abertura do microfone, com o nome e o id do endpoint que de fato abriu (o padrão do Windows quando o escolhido sumiu), e de novo para cada cliente novo.
+- **Silêncio do lado do Jay-C:** sem `AUDIO` para mandar (microfone desligado), o Jay-A manda `PING` a cada 5 s. Sem ouvir nada do Jay-C por 10 s, fecha a conexão.
+- **Tolerância:** um `CONTROL` de tipo desconhecido é ignorado (um Jay-C mais novo, por exemplo o soundboard da etapa 8). `AUDIO` vindo do Jay-C, opcode desconhecido, JSON que não é objeto e mensagem acima de 64 KB derrubam a conexão.
+- **Fila do áudio:** até 5 blocos esperando o pipe. Cheia, os blocos novos são descartados, para não acumular atraso na chamada.
 
 **Teste:** `cargo run --example jay_a_probe -- [PIPE] [SEGUNDOS]` no plugin `system-audio` do JayC. Ele conecta, faz o `HELLO`, pede o microfone por 30 s e mede os intervalos entre blocos (p50, p99, máximo). Passa se o link não fechou, se veio áudio e se nenhum intervalo passou de 60 ms. Medido pelo Jay-C contra o Jay-A falso: p99 de 32,1 ms, PASS; um travamento de 200 ms dá FAIL, como deve.
 
@@ -582,6 +593,18 @@ Cada etapa termina com algo testável.
   - **Tamanho do instalador:** não medido; o modelo tem 8 MB.
   - **Qualidade com uma voz de verdade:** a avaliação usa voz sintética e cliques sintéticos; o veredito é o seu ouvido.
 - **Monitor, ponto aberto:** o teste manual do monitor (`cargo test -- --ignored`) passou a medir só a energia em 440 Hz (Goertzel), para não contar outros sons do PC. Numa segunda rodada, com outro som tocando no PC, o tom saiu a −50,8 dBFS na saída padrão, contra −35,2 na etapa 1, e o teste falhou. Um print temporário mostrou o monitor entregando 480 quadros a cada pedido do dispositivo, com o tom dentro, então a perda acontece depois, no Windows. Não foi confirmado onde: pode ser o Windows baixando o volume dos outros apps durante uma chamada, ou o volume do processo no mixer. Vale repetir com o PC em silêncio e sem chamada aberta.
+
+**Etapa 3, o servidor (2026-11-06)** (o resto da etapa, a chamada de verdade, é a I5 do Jay-C):
+- **`cargo test` do link** (com um cliente no mesmo processo): `HELLO` com os campos que o Jay-C confere; `start-mic`, `call-state`, `show` e `stop-mic` viram eventos; `AUDIO` de 3 840 bytes só depois do `start-mic`; `PING` → `PONG`; o `state` chega ao cliente conectado e a cada cliente novo; outro protocolo recebe `{ error }`; `AUDIO` do cliente, opcode 9, JSON que não é objeto e JSON inválido derrubam a conexão; um segundo servidor com o mesmo nome falha.
+- **Reconexão:** conectar e desconectar 3 vezes funciona. Criando a instância nova antes de fechar a antiga (a armadilha da seção 6), o teste falha.
+- **Segurança do pipe:** lida pelo próprio teste, a DACL do pipe é `D:P(A;;FA;;;OW)`: protegida, com um único acesso, o do dono.
+- **`jay_a_probe` do Jay-C contra o app de dev, com o "Microfone (4- ME6S)" e a cadeia com DeepFilterNet:** PASS. Em 30 s chegaram 1 405 blocos; o intervalo entre eles ficou em p50 20,0 ms, p99 20,7 ms e máximo 22,0 ms, sem nenhum acima de 60 ms. O primeiro bloco chegou 1,9 s depois do `start-mic` na primeira abertura depois de o app subir; nas seguintes, de 130 a 240 ms (abrir o microfone leva ~180 ms). O Jay-C cobre essa espera com a reserva.
+- **Teste da tela durante o probe:** começar e parar o teste da aba Filtros com o Jay-C no microfone não o reabriu (intervalo máximo de 21,1 ms, PASS). O estado na tela passou de "não conectado" para "usando este microfone" e voltou quando o probe saiu.
+- **Referência de eco** (`cargo test -- --ignored echo`): um tom de 440 Hz a −26 dBFS tocado por um PowerShell filho chegou à captura daquele processo a −26,1 dBFS. No Jay-C aberto, o WebView2 achado foi o único `msedgewebview2.exe` filho do `jay-c.exe`.
+- **Não visto:**
+  - **O eco sendo tirado numa chamada:** o probe não tem WebView2, então o cancelamento ficou desligado nele (a tela avisa). O teste de eco da etapa 1 mede o AEC; falta a chamada de verdade (I5).
+  - **Fechar o Jay-A no meio da chamada** e o som de outros apps sem abafar: também na I5.
+- **Atalho conhecido:** um microfone que falha no meio da chamada (desconectado) só avisa a tela. O Jay-C nota a falta de `AUDIO` e fica na reserva até reconectar.
 
 ## 13. Decisões em aberto
 

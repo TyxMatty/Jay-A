@@ -49,11 +49,17 @@ fn main() {
             #[cfg(windows)]
             audio::list_mics,
             #[cfg(windows)]
+            audio::mic_options,
+            #[cfg(windows)]
+            audio::set_mic_options,
+            #[cfg(windows)]
             audio::start_mic,
             #[cfg(windows)]
             audio::stop_mic,
             #[cfg(windows)]
             audio::set_monitor,
+            #[cfg(windows)]
+            audio::link_state,
             #[cfg(windows)]
             audio::effects_catalog,
             #[cfg(windows)]
@@ -78,9 +84,10 @@ fn main() {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = window.hide();
-                // But a microphone test ends: nobody is looking at the meter anymore.
+                // But a microphone test ends: nobody is looking at the meter anymore. (Jay-C keeps
+                // the mic if it's using it.)
                 #[cfg(windows)]
-                if window.state::<audio::MicState>().0.lock().is_ok_and(|mut mic| mic.take().is_some()) {
+                if window.state::<audio::MicState>().stop_test(&window.state::<audio::ChainState>()) {
                     let _ = window.emit("mic-stopped", ());
                 }
             }
@@ -108,8 +115,10 @@ fn main() {
             app.manage(TrayItems { open, quit });
             #[cfg(windows)]
             {
-                app.manage(audio::MicState::default());
-                app.manage(audio::ChainState::load(&app.path().app_config_dir()?));
+                let config_dir = app.path().app_config_dir()?;
+                app.manage(audio::MicState::load(&config_dir));
+                app.manage(audio::ChainState::load(&config_dir));
+                audio::start_link(app.handle());
             }
             // The window starts hidden (tauri.conf.json), so --background never flashes it.
             if !background(&std::env::args().collect::<Vec<_>>()) {

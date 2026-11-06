@@ -30,7 +30,14 @@ export default {
   "Testing: {device}": "Testando: {device}",
   "The microphone stopped: {error}": "O microfone parou: {error}",
   "Couldn't open the microphone: {error}": "Não deu pra abrir o microfone: {error}",
-  "Echo cancellation arrives with the Jay-C link (stage 3).": "O cancelamento de eco chega com a ligação ao Jay-C (etapa 3).",
+  "Jay-C isn't connected. In a call with Jay-A's filter, Jay-C gets this microphone with this chain.":
+    "O Jay-C não está conectado. Numa chamada com o filtro do Jay-A, o Jay-C recebe este microfone com esta cadeia.",
+  "Jay-C {version} is connected.": "O Jay-C {version} está conectado.",
+  "Jay-C {version} is using this microphone in a call.": "O Jay-C {version} está usando este microfone numa chamada.",
+  "Jay-C {version} is using this microphone.": "O Jay-C {version} está usando este microfone.",
+  "Echo cancellation is on.": "O cancelamento de eco está ligado.",
+  "Echo cancellation is off: Jay-C's audio wasn't found.": "O cancelamento de eco está desligado: o som do Jay-C não foi encontrado.",
+  "You're muted in Jay-C.": "Você está mutado no Jay-C.",
 
   // The effect chain (ui/chain-editor.js)
   "Effect chain": "Cadeia de efeitos",
