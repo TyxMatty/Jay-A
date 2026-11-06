@@ -1,0 +1,17 @@
+{
+  "name": "jay-a",
+  "private": true,
+  "description": "Jay-A — audio filters, editing, soundboard and conversion for the Jay line",
+  "workspaces": [
+    "frontend"
+  ],
+  "scripts": {
+    "dev": "npm run tauri dev -w frontend",
+    "build": "npm run tauri build -w frontend",
+    "web": "npm run dev -w frontend",
+    "test": "npm test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

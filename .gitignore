@@ -1,0 +1,30 @@
+node_modules/
+dist/
+*.log
+.env
+.env.*
+!.env.example
+
+# Rust / Tauri
+target/
+frontend/src-tauri/gen/schemas/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# Local Claude Code tooling
+.claude/
+
+# Instructions for AI coding agents (kept on each machine, not in the repo)
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+
+# Machine-local Cargo config (target-dir outside OneDrive)
+/.cargo/
