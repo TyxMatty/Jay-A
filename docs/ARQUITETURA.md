@@ -202,18 +202,21 @@ flowchart LR
 ```
 
 ```rust
-// O que cada efeito implementa (esboço da etapa 2).
-trait Effect: Send {
-    fn params(&self) -> &'static [ParamSpec];   // a UI e os presets usam isto
-    fn set_param(&mut self, id: usize, value: f32); // já clampado; o efeito faz a rampa
-    fn process(&mut self, frame: &mut [f32; 480]);  // 10 ms, mono, no lugar
-    fn latency_frames(&self) -> usize { 0 }
-    fn reset(&mut self) {}                          // ao religar: limpa memórias (envelopes, filtros)
+// crates/jay-audio/src/dsp/effect.rs (etapa 2a): o que cada efeito implementa.
+pub trait Effect: Send {                           // roda na thread de áudio: sem alocar, sem lock
+    fn set_param(&mut self, index: usize, value: f32); // já clampado; o efeito faz a rampa
+    fn process(&mut self, frame: &mut [f32]);       // 10 ms (480 amostras), mono, no lugar
+    fn latency(&self) -> usize { 0 }                // lida ao montar a cadeia
+    fn reset(&mut self);                            // ao montar e ao religar: limpa envelopes e filtros
 }
+pub struct EffectInfo { pub kind: &'static str, pub params: &'static [ParamSpec], pub create: fn() -> Box<dyn Effect> }
 
-struct ParamSpec { key: &'static str, min: f32, max: f32, default: f32, step: f32, scale: Scale, unit: Unit }
-enum Scale { Linear, Log, Db }
+// dsp/params.rs: o que um parâmetro aceita; COMMON são os controles que o host dá a todo efeito.
+pub struct ParamSpec { pub key: &'static str, pub min: f32, pub max: f32, pub default: f32, pub step: f32, pub scale: Scale, pub unit: &'static str }
+pub enum Scale { Linear, Log, Db, Toggle, Choice(&'static [&'static str]) }
 ```
+
+- **A latência é lida quando a cadeia é montada.** Um parâmetro que muda a latência (o lookahead do limitador) monta a cadeia de novo, com o crossfade de sempre.
 
 - **Desligar um efeito** passa o áudio direto, com uma rampa de 10 ms entre o processado e o original. Ao religar, o efeito chama `reset()`, para não soltar um envelope velho.
 - **Latência:** cada efeito informa a sua. A cadeia soma e mostra o total na tela (RNF-1). O dry/wet de um efeito com latência atrasa o sinal seco na mesma medida.
