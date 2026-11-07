@@ -1279,3 +1279,44 @@ fieldset > h3 {
   margin-bottom: 12px;
   align-items: flex-end;
 }
+
+/* Wide dialogs (the virtual cable guide), from Jay-C: the body scrolls between header and footer. */
+.modal-wide {
+  width: min(720px, calc(100vw - 32px));
+}
+.modal-wide[open] > form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 34px);
+}
+.modal-wide .modal-body {
+  flex: 1;
+  min-height: 0;
+}
+.cable-guide p,
+.cable-guide li {
+  line-height: 1.5;
+}
+.guide-step {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.guide-step h3 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+.guide-step-n {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-contrast, #fff);
+  font-size: 13px;
+  font-weight: 700;
+}

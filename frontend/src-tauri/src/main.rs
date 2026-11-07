@@ -11,6 +11,8 @@ mod soundboard;
 mod convert;
 #[cfg(windows)]
 mod editor;
+#[cfg(windows)]
+mod cable_setup;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -108,6 +110,10 @@ fn main() {
             convert::convert_start,
             #[cfg(windows)]
             convert::convert_cancel,
+            #[cfg(windows)]
+            cable_setup::cable_install,
+            #[cfg(windows)]
+            cable_setup::cable_site,
             #[cfg(windows)]
             editor::editor_open,
             #[cfg(windows)]

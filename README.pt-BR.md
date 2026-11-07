@@ -20,6 +20,12 @@ O app de áudio da linha Jay: filtros para o seu microfone, que o [Jay-C](https:
   <tr align="center"><td>Calmo</td><td>Neon</td><td>Suave</td></tr>
 </table>
 
+## Requisitos
+
+- **Windows 10 (1803 ou mais novo) ou 11.**
+- **[VB-CABLE](https://vb-audio.com/Cable/)** (VB-Audio, donationware grátis), para usar o Jay-A como microfone em **outros apps** (Discord, OBS...) e mandar o soundboard para eles. O Jay-A o instala para você: **Filtros › Configurar o cabo virtual…** baixa o instalador da própria VB-Audio, confere a assinatura e o abre (o Windows pede permissão de administrador, porque é um driver de som), e depois liga a ponte. O VB-CABLE não vai dentro do instalador do Jay-A: isso exige uma licença de distribuidor da VB-Audio.
+- **O Jay-C não precisa do cabo:** ele recebe o microfone e o soundboard do Jay-A direto.
+
 ## Download
 
 Instale e atualize o Jay-A pelo **[Jay-H](https://github.com/TyxMatty/Jay-H)**, o hub da linha Jay. Ou baixe o `Jay-A_<versão>_x64-setup.exe` do **[último release](https://github.com/TyxMatty/Jay-A/releases/latest)**: ele atualiza uma versão anterior no lugar e mantém as suas configurações. Todas as versões estão em [releases](https://github.com/TyxMatty/Jay-A/releases).

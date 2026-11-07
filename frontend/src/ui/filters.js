@@ -7,6 +7,7 @@ import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import { t } from '../core/i18n.js';
 import { createChainEditor } from './chain-editor.js';
+import { createCableGuide } from './cable-guide.js';
 
 const isTauri = '__TAURI_INTERNALS__' in window;
 const METER_FLOOR = -70;
@@ -79,6 +80,7 @@ export function createFiltersPanel() {
         cableSelect,
         h('p', { class: 'hint' }, t('Sends the filtered microphone (and the soundboard) to a virtual cable. In Discord, OBS and others, pick the other end of the cable as the microphone: for "CABLE Input", choose "CABLE Output". No cable? VB-Cable is free at vb-audio.com.')),
         cableMessage,
+        h('div', { class: 'button-row' }, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => cableGuide?.open() }, t('Set up the virtual cable…'))),
       ),
       linkStatus,
     ),
@@ -89,6 +91,7 @@ export function createFiltersPanel() {
   let testing = false;
   let channel = null;
   let chainEditor = null;
+  let cableGuide = null;
   let mics = [];
 
   const render = () => {
@@ -190,6 +193,8 @@ export function createFiltersPanel() {
       },
     });
     panel.append(chainEditor.element);
+    cableGuide = createCableGuide({ invoke, onBridge: () => listCables() });
+    document.body.append(cableGuide.element);
     // The window went to the tray: the test ended.
     event.listen('mic-stopped', () => {
       channel = null;
