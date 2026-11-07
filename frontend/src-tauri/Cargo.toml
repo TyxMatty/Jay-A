@@ -1,6 +1,6 @@
 [package]
 name = "jay-a"
-version = "0.3.2"
+version = "0.3.3"
 description = "Jay-A — audio filters, editing, soundboard and conversion"
 authors = ["TyxMatty"]
 license = "MIT"
