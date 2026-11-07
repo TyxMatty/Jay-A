@@ -2,22 +2,48 @@
 
 [English](README.md) · **Português**
 
-App de áudio da linha Jay: filtros do microfone (uma opção no [Jay-C](https://github.com/TyxMatty/Jay-C), no lugar do filtro dele), edição de áudio, soundboard e conversão de formatos. Windows primeiro.
+O app de áudio da linha Jay: filtros para o seu microfone, que o [Jay-C](https://github.com/TyxMatty/Jay-C) pode usar nas chamadas no lugar dos dele, e, mais adiante, edição de áudio, soundboard e conversão de formatos. Windows primeiro.
 
-É para quem faz chamadas e lives pelo Jay-C e quer a voz limpa (sem teclado, cliques ou vozes ao fundo) e ferramentas de áudio simples num app leve, sem assinar um serviço de remoção de ruído à parte.
+<p align="center"><img src="docs/images/chain.png" alt="A cadeia de efeitos do Jay-A: remoção de ruído, filtro, gate, equalizador, compressor e de-esser, com o filtro aberto mostrando os controles" width="820"></p>
 
-O que está pronto e o que vem a seguir: [`ROADMAP.md`](ROADMAP.md) (em inglês). Arquitetura, fluxos e etapas: [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md). Pronto até aqui: a janela (nos estilos Calmo, Neon e Suave do Jay-C) e o ícone na bandeja; em Filtros, o microfone com a limpeza do WebRTC, o medidor e o "Ouvir meu microfone", a cadeia de efeitos (remoção de ruído por IA com DeepFilterNet ou RNNoise, filtro, gate, equalizador, compressor, de-esser, limitador) e os presets; e o Jay Link, que entrega o microfone filtrado ao Jay-C nas chamadas, com cancelamento de eco. O soundboard, o editor e o conversor ainda são só a casca.
+- **Voz limpa nas chamadas:** a remoção de ruído por IA (DeepFilterNet ou RNNoise) tira teclado, cliques e ventilador; a limpeza e o cancelamento de eco do WebRTC vêm antes.
+- **A sua cadeia de efeitos:** filtro, gate, equalizador, compressor, de-esser e limitador, na ordem que você escolher, com medidores ao vivo e presets para salvar, importar e exportar.
+- **Ligado ao Jay-C:** o Jay-C recebe o microfone filtrado por um pipe local. Se o Jay-A parar, o filtro do próprio Jay-C assume na hora e a chamada continua.
+- **Leve:** fica na bandeja e só abre o microfone enquanto alguém o usa.
 
-## Rodando
+<table>
+  <tr>
+    <td><img src="docs/images/filters-calm.png" alt="A aba Filtros no estilo Calmo, roxo"></td>
+    <td><img src="docs/images/filters-neon.png" alt="A aba Filtros no estilo Neon, ciano"></td>
+    <td><img src="docs/images/filters-soft.png" alt="A aba Filtros no estilo Suave, laranja"></td>
+  </tr>
+  <tr align="center"><td>Calmo</td><td>Neon</td><td>Suave</td></tr>
+</table>
 
-Precisa das mesmas ferramentas do Jay-C (Node 22+, Rust com MSVC e Python com Meson e Ninja, para o processamento de áudio do WebRTC; ver o `docs/CONTINUAR.md` dele).
+## Download
+
+Instale e atualize o Jay-A pelo **[Jay-H](https://github.com/TyxMatty/Jay-H)**, o hub da linha Jay. Ou baixe o `Jay-A_<versão>_x64-setup.exe` do **[último release](https://github.com/TyxMatty/Jay-A/releases/latest)**: ele atualiza uma versão anterior no lugar e mantém as suas configurações. Todas as versões estão em [releases](https://github.com/TyxMatty/Jay-A/releases).
+
+## Código
+
+| Pasta | Conteúdo |
+|---|---|
+| [`crates/jay-audio/`](crates/jay-audio/) | O engine de áudio (Rust, sem Tauri): microfone, processamento de áudio do WebRTC, a cadeia e os efeitos, o servidor do Jay Link |
+| [`frontend/`](frontend/) | App Tauri v2 + JS puro (Vite) |
+| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, fluxos, etapas e o que foi medido |
+| [`docs/REFERENCIAS.md`](docs/REFERENCIAS.md) | Notas do estudo do EasyEffects e do Carla (só ideias, nenhum código) |
+| [`scripts/`](scripts/) | Ferramentas de desenvolvimento: o app com depuração, rodar JS no app de verdade, fala sintética para testes, os prints do README |
+
+## Rodando o app
 
 ```bash
 npm install
 npm run dev
 ```
 
-`npm run dev` abre a janela do Jay-A (Tauri) com recarregamento automático. Fechar a janela deixa o Jay-A na bandeja; para sair, clique com o botão direito no ícone dele. `jay-a.exe --background` abre só na bandeja (é assim que o Jay-C o inicia). Para abrir só a interface no navegador, sem Tauri: `npm run web` (porta 5175).
+Isso abre a janela do Jay-A (Tauri) com recarregamento automático. Fechar a janela deixa o Jay-A na bandeja; para sair, clique com o botão direito no ícone dele. `jay-a.exe --background` abre só na bandeja (é assim que o Jay-C o inicia). Para abrir só a interface no navegador, sem Tauri, use `npm run web` (porta 5175).
+
+O build também precisa de **Python com Meson e Ninja** (`py -m pip install --user meson ninja`, com a pasta Scripts do Python no PATH), para o processamento de áudio do WebRTC. O primeiro build baixa o abseil-cpp e leva alguns minutos a mais.
 
 O build do Rust gera vários GB. Para não ir para o OneDrive, crie um `.cargo/config.toml` (fica fora do git) apontando para outra pasta:
 
@@ -28,7 +54,7 @@ target-dir = "C:/Users/<você>/.cargo-target/jay-a"
 
 ## Releases
 
-O Jay-H, o hub da linha, instala e atualiza o Jay-A pelos releases do GitHub. Um tag de versão (`v*`) gera o instalador no GitHub Actions (`installer.yml`); publicá-lo num release com o mesmo tag entrega a atualização.
+Um tag de versão (`v*`) gera o instalador no GitHub Actions ([`installer.yml`](.github/workflows/installer.yml)); publicá-lo num release com o mesmo tag entrega a atualização pelo Jay-H.
 
 ## Testes
 
