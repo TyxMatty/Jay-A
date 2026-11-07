@@ -26,6 +26,10 @@ O build do Rust gera vários GB. Para não ir para o OneDrive, crie um `.cargo/c
 target-dir = "C:/Users/<você>/.cargo-target/jay-a"
 ```
 
+## Releases
+
+O Jay-H, o hub da linha, instala e atualiza o Jay-A pelos releases do GitHub. Um tag de versão (`v*`) gera o instalador no GitHub Actions (`installer.yml`); publicá-lo num release com o mesmo tag entrega a atualização.
+
 ## Testes
 
 ```bash

@@ -26,6 +26,10 @@ The Rust build takes several GB. To keep it out of OneDrive, create a `.cargo/co
 target-dir = "C:/Users/<you>/.cargo-target/jay-a"
 ```
 
+## Releases
+
+Jay-H, the line's hub, installs and updates Jay-A from its GitHub releases. A version tag (`v*`) builds the installer in GitHub Actions (`installer.yml`); publishing it in a release with the same tag delivers the update.
+
 ## Tests
 
 ```bash

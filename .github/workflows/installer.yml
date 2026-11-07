@@ -1,0 +1,51 @@
+# The Windows installer (NSIS), built on a clean machine: on a version tag (v*) or by hand from the
+# Actions tab. It is kept as the run's artifact; publishing the release stays a manual step, as in
+# Jay-C and Jay-H. Jay-H (the line's hub) installs and updates Jay-A from that release: it reads the
+# latest release, downloads the `*_x64-setup.exe` asset and checks its SHA-256.
+name: Installer
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows installer (NSIS)
+    runs-on: windows-latest
+    env:
+      CARGO_TARGET_DIR: ${{ github.workspace }}\target
+    steps:
+      - uses: actions/checkout@v7
+      # Jay-H compares the tag with the installed version: a tag that isn't the app's version
+      # would offer an update forever.
+      - name: The tag is the app's version
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = (Get-Content frontend/src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
+          if ("v$version" -ne $env:GITHUB_REF_NAME) { throw "tag $env:GITHUB_REF_NAME, tauri.conf.json $version" }
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      # crates/jay-audio's build.rs compiles WebRTC's audio processing with Meson + Ninja.
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - run: python -m pip install meson ninja
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri -> ../../target
+      - run: npm ci
+      # tauri build: vite build, cargo build --release, then the NSIS installer.
+      - run: npm run build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Jay-A-installer-${{ github.ref_name }}
+          path: target/release/bundle/nsis/*.exe
+          if-no-files-found: error
