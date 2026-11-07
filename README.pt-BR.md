@@ -2,9 +2,11 @@
 
 [English](README.md) · **Português**
 
-App de áudio da linha Jay: filtros do microfone (uma opção no [Jay-C](https://github.com/TyxMatty/JayC), no lugar do filtro dele), edição de áudio, soundboard e conversão de formatos. Windows primeiro.
+App de áudio da linha Jay: filtros do microfone (uma opção no [Jay-C](https://github.com/TyxMatty/Jay-C), no lugar do filtro dele), edição de áudio, soundboard e conversão de formatos. Windows primeiro.
 
-Arquitetura, fluxos e etapas: [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md). Pronto até aqui: a janela (nos estilos Calmo, Neon e Suave do Jay-C) e o ícone na bandeja; em Filtros, o microfone com a limpeza do WebRTC, o medidor e o "Ouvir meu microfone", a cadeia de efeitos (remoção de ruído por IA com DeepFilterNet ou RNNoise, filtro, gate, equalizador, compressor, de-esser, limitador) e os presets; e o Jay Link, que entrega o microfone filtrado ao Jay-C nas chamadas, com cancelamento de eco. O soundboard, o editor e o conversor ainda são só a casca.
+É para quem faz chamadas e lives pelo Jay-C e quer a voz limpa (sem teclado, cliques ou vozes ao fundo) e ferramentas de áudio simples num app leve, sem assinar um serviço de remoção de ruído à parte.
+
+O que está pronto e o que vem a seguir: [`ROADMAP.md`](ROADMAP.md) (em inglês). Arquitetura, fluxos e etapas: [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md). Pronto até aqui: a janela (nos estilos Calmo, Neon e Suave do Jay-C) e o ícone na bandeja; em Filtros, o microfone com a limpeza do WebRTC, o medidor e o "Ouvir meu microfone", a cadeia de efeitos (remoção de ruído por IA com DeepFilterNet ou RNNoise, filtro, gate, equalizador, compressor, de-esser, limitador) e os presets; e o Jay Link, que entrega o microfone filtrado ao Jay-C nas chamadas, com cancelamento de eco. O soundboard, o editor e o conversor ainda são só a casca.
 
 ## Rodando
 
