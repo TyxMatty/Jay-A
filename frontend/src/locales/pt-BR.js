@@ -139,6 +139,8 @@ export default {
   "In Jay-C's call and in the microphone for other apps (Filters). Muting in Jay-C mutes the clips there too.":
     "Na chamada do Jay-C e no microfone para outros apps (Filtros). Mutar no Jay-C muta os clipes lá também.",
   "Microphone for other apps": "Microfone para outros apps",
+  "The microphone stopped sending audio. Unplug it and plug it back in, or pick another one.":
+    "O microfone parou de mandar áudio. Tire e ponha o USB de novo, ou escolha outro.",
   "Sends the filtered microphone (and the soundboard) to a virtual cable. In Discord, OBS and others, pick the other end of the cable as the microphone: for \"CABLE Input\", choose \"CABLE Output\". No cable? VB-Cable is free at vb-audio.com.":
     "Manda o microfone filtrado (e o soundboard) para um cabo virtual. No Discord, no OBS e em outros, escolha a outra ponta do cabo como microfone: para \"CABLE Input\", escolha \"CABLE Output\". Sem cabo? O VB-Cable é grátis em vb-audio.com.",
   "The chosen cable isn't connected.": "O cabo escolhido não está conectado.",

@@ -13,6 +13,7 @@ use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use wasapi::{AudioCaptureClient, AudioClient, DeviceEnumerator, Direction, Handle, SampleType, StreamMode, WaveFormat, initialize_mta};
@@ -47,6 +48,39 @@ fn yes() -> bool {
 impl Default for MicOptions {
     fn default() -> Self {
         MicOptions { noise_suppression: true, auto_gain_control: true, device: None }
+    }
+}
+
+/// What the mic thread reports after the start.
+#[derive(Debug, Clone, PartialEq)]
+pub enum MicEvent {
+    /// The capture ended (e.g. the mic was unplugged).
+    Failed(String),
+    /// true: the device stopped sending audio (no frames for `SILENT_AFTER`), seen with a USB
+    /// headset whose driver stalls; false: it sends again.
+    Silent(bool),
+}
+
+/// Without a single frame for this long, the device counts as stalled.
+const SILENT_AFTER: Duration = Duration::from_secs(1);
+
+/// Decides when the device went silent, and when it came back.
+struct Watchdog {
+    last: Instant,
+    silent: bool,
+}
+
+impl Watchdog {
+    /// Some(state) when it changes.
+    fn update(&mut self, now: Instant, got_frames: bool) -> Option<bool> {
+        if got_frames {
+            self.last = now;
+        }
+        let silent = now.duration_since(self.last) >= SILENT_AFTER;
+        (silent != self.silent).then(|| {
+            self.silent = silent;
+            silent
+        })
     }
 }
 
@@ -87,8 +121,8 @@ impl Mic {
     /// what its WebView2 plays, and what the soundboard plays (`soundboard_echo`), is then removed
     /// from the mic. `soundboard`: the call's soundboard voices, mixed in after the chain. `on_chunk`
     /// gets each 20 ms chunk and the levels, on the audio thread (it must not allocate or wait: e.g.
-    /// `try_send` to another thread); `on_error` a failure after the start (e.g. the mic was
-    /// unplugged; the capture ends).
+    /// `try_send` to another thread); `on_event` a failure after the start (the capture ends) or
+    /// the device going silent and back (`MicEvent`).
     pub fn start(
         options: MicOptions,
         echo_of: Option<u32>,
@@ -96,7 +130,7 @@ impl Mic {
         soundboard: Option<Mixer>,
         soundboard_echo: Played,
         on_chunk: impl FnMut(&[f32; CHUNK_FRAMES], &Meters) + Send + 'static,
-        on_error: impl Fn(String) + Send + 'static,
+        on_event: impl Fn(MicEvent) + Send + 'static,
     ) -> Result<Mic, String> {
         let echo = echo_of.and_then(|pid| {
             let Some(root) = webview_of(pid) else {
@@ -114,7 +148,7 @@ impl Mic {
             .spawn({
                 let (stop, monitor) = (stop.clone(), monitor.clone());
                 let audio = Audio { chain, soundboard, played, soundboard_echo };
-                move || run_mic(options, audio, &stop, &monitor, ready_tx, on_chunk, on_error)
+                move || run_mic(options, audio, &stop, &monitor, ready_tx, on_chunk, on_event)
             })
             .map_err(|e| e.to_string())?;
         match ready_rx.recv() {
@@ -214,7 +248,7 @@ fn run_mic(
     monitor: &Mutex<Option<Monitor>>,
     ready: mpsc::Sender<Result<(String, String), String>>,
     mut on_chunk: impl FnMut(&[f32; CHUNK_FRAMES], &Meters),
-    on_error: impl Fn(String),
+    on_event: impl Fn(MicEvent),
 ) {
     crate::audio_thread_priority();
     if let Err(e) = initialize_mta().ok() {
@@ -245,24 +279,27 @@ fn run_mic(
     let mut filled = 0;
     let mut meters = Meters { level: f32::NEG_INFINITY, effects: [(0.0, 0.0); MAX_SLOTS], count: 0 };
 
+    let mut watchdog = Watchdog { last: Instant::now(), silent: false };
     while !stop.load(Ordering::SeqCst) {
-        if event.wait_for_event(100).is_err() {
-            continue;
-        }
-        loop {
+        let signalled = event.wait_for_event(100).is_ok();
+        while signalled {
             match capture.get_next_packet_size() {
                 Ok(Some(frames)) if frames > 0 => {
                     if let Err(e) = capture.read_from_device_to_deque(&mut raw) {
-                        on_error(format!("microphone failed: {e}"));
+                        on_event(MicEvent::Failed(format!("microphone failed: {e}")));
                         return;
                     }
                 }
                 Ok(_) => break,
                 Err(e) => {
-                    on_error(format!("microphone failed: {e}"));
+                    on_event(MicEvent::Failed(format!("microphone failed: {e}")));
                     return;
                 }
             }
+        }
+        // Only when it changes, and then no audio is flowing: the callback may allocate.
+        if let Some(silent) = watchdog.update(Instant::now(), !raw.is_empty()) {
+            on_event(MicEvent::Silent(silent));
         }
         let mut bytes = raw.drain(..raw.len() / 4 * 4);
         while let (Some(a), Some(b), Some(c), Some(d)) = (bytes.next(), bytes.next(), bytes.next(), bytes.next()) {
@@ -319,4 +356,22 @@ fn run_mic(
         }
     }
     let _ = client.stop_stream();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_watchdog_flags_a_silent_device_and_its_return_once() {
+        let t0 = Instant::now();
+        let mut dog = Watchdog { last: t0, silent: false };
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        assert_eq!(dog.update(at(10), true), None);
+        assert_eq!(dog.update(at(900), false), None, "a short gap is nothing");
+        assert_eq!(dog.update(at(1_020), false), Some(true), "1 s without frames");
+        assert_eq!(dog.update(at(1_500), false), None, "said once");
+        assert_eq!(dog.update(at(1_600), true), Some(false), "frames again");
+        assert_eq!(dog.update(at(1_700), true), None);
+    }
 }

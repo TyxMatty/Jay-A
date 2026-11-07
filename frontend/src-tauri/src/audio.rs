@@ -12,6 +12,7 @@
 use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::sync_channel;
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
@@ -23,7 +24,7 @@ use jay_audio::link::{LinkEvent, LinkServer, PIPE};
 use jay_audio::monitor::Monitor;
 use jay_audio::playback::echo_queue;
 use jay_audio::soundboard::{self, Player};
-use jay_audio::{Mic, MicDevice, MicOptions};
+use jay_audio::{Mic, MicDevice, MicEvent, MicOptions};
 use serde_json::{Value, json};
 use tauri::ipc::Channel;
 use tauri::{AppHandle, Emitter, Manager, State};
@@ -55,6 +56,10 @@ struct Engine {
     /// microphone of Jay-A's own. While set, the mic stays open.
     cable: Option<String>,
     cable_out: Arc<Mutex<Option<Monitor>>>,
+    /// The open mic stopped sending audio (a stalled USB headset): the page warns.
+    silent: Arc<AtomicBool>,
+    /// For the `mic-silent` event (set with the link, at start).
+    app: Option<AppHandle>,
 }
 
 /// The Jay-C connected now.
@@ -137,6 +142,11 @@ impl Engine {
             self.mic = None;
             self.opened = None;
             self.call = None;
+            if self.silent.swap(false, Ordering::SeqCst)
+                && let Some(app) = &self.app
+            {
+                let _ = app.emit("mic-silent", false); // a new mic says again if it's silent
+            }
             if let Some((options, echo_of)) = wanted.clone() {
                 let (call, mixer) = soundboard::mixer();
                 let mic = self.open(options, echo_of, chain, mixer)?;
@@ -209,9 +219,20 @@ impl Engine {
                 }
                 let _ = meters_tx.try_send(*m); // full: the page just misses one
             },
-            move |error| {
-                if let Some(page) = page.lock().unwrap().as_ref() {
-                    let _ = page.send(json!({ "error": error }));
+            {
+                let (silent, app) = (self.silent.clone(), self.app.clone());
+                move |event| match event {
+                    MicEvent::Failed(error) => {
+                        if let Some(page) = page.lock().unwrap().as_ref() {
+                            let _ = page.send(json!({ "error": error }));
+                        }
+                    }
+                    MicEvent::Silent(on) => {
+                        silent.store(on, Ordering::SeqCst);
+                        if let Some(app) = &app {
+                            let _ = app.emit("mic-silent", on);
+                        }
+                    }
                 }
             },
         )
@@ -220,7 +241,7 @@ impl Engine {
     /// What the page shows about Jay-C.
     fn link_state(&self) -> Value {
         match &self.jay_c {
-            None => json!({ "connected": false }),
+            None => json!({ "connected": false, "micSilent": self.silent.load(Ordering::SeqCst) }),
             Some(j) => json!({
                 "connected": true,
                 "version": j.version,
@@ -228,6 +249,7 @@ impl Engine {
                 "inCall": j.in_call,
                 "muted": j.muted,
                 "echoCancellation": j.wants_mic && self.mic.as_ref().is_some_and(|m| m.echo_cancellation),
+                "micSilent": self.silent.load(Ordering::SeqCst),
             }),
         }
     }
@@ -250,6 +272,9 @@ fn import(options: &mut MicOptions, from: &Value) {
 
 /// Starts the Jay Link server; without it (the pipe is taken), Jay-A runs alone.
 pub fn start_link(app: &AppHandle) {
+    if let Ok(mut engine) = app.state::<MicState>().lock() {
+        engine.app = Some(app.clone());
+    }
     let handle = app.clone();
     let version = app.package_info().version.to_string();
     match LinkServer::start(PIPE, &version, move |event| on_link(&handle, event)) {

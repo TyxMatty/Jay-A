@@ -54,6 +54,8 @@ export function createFiltersPanel() {
   const status = h('span', { class: 'hint mic-meter-status' });
   const testButton = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => (testing ? stop() : start()) });
   const message = h('p', { class: 'hint', 'aria-live': 'polite' });
+  // The device stopped sending audio (a stalled USB headset): nobody hears the mic, not even Jay-C.
+  const silent = h('p', { class: 'hint warning', role: 'alert', hidden: true }, t('The microphone stopped sending audio. Unplug it and plug it back in, or pick another one.'));
   const linkStatus = h('p', { class: 'hint', 'aria-live': 'polite' }, linkText({ connected: false }));
   // The filtered mic for other apps, through a virtual cable (like a microphone of Jay-A's own).
   const cableSelect = h('select', { class: 'input', id: 'filters-cable', onChange: (e) => setCable(e.target.value || null) });
@@ -65,6 +67,7 @@ export function createFiltersPanel() {
       {},
       h('h3', {}, t('Microphone')),
       h('div', { class: 'field' }, h('label', { for: 'filters-mic' }, t('Microphone')), micSelect),
+      silent,
       noise.row,
       gain.row,
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('Level')), meter, h('div', { class: 'row-between' }, status, testButton), message),
@@ -200,7 +203,11 @@ export function createFiltersPanel() {
       renderOptions();
     });
     event.listen('link-state', (e) => (linkStatus.textContent = linkText(e.payload)));
-    invoke('link_state').then((link) => (linkStatus.textContent = linkText(link)));
+    event.listen('mic-silent', (e) => (silent.hidden = !e.payload));
+    invoke('link_state').then((link) => {
+      linkStatus.textContent = linkText(link);
+      silent.hidden = !link.micSilent;
+    });
     listCables();
     [options, mics] = await Promise.all([invoke('mic_options'), invoke('list_mics').catch(() => [])]);
     renderOptions();

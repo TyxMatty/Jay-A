@@ -625,7 +625,8 @@ Cada etapa termina com algo testável.
   - num teste isolado com a cadeia do usuário, os blocos chegaram até 83 ms um do outro, com e sem cancelamento de eco.
 - **Correção:** as threads do microfone, da referência de eco, do DeepFilterNet e do link se registram no MMCSS do Windows ("Pro Audio", `audio_thread_priority` no `lib.rs`). Com a CPU ainda em 100%, o máximo caiu para 22 ms (p99 de 21 ms), e o Jay-C mostrou "Jay-A ligado".
 - **Falta:** a chamada de verdade (a I5 do Jay-C).
-- **Os "0 blocos" intermitentes eram o microfone:** em 2026-11-07, o Jay-A abria o "Microfone (4- ME6S)" e o `state` saía, mas nenhum áudio vinha. O exemplo `mic_open` do Jay-C, abrindo o mesmo microfone por conta própria, recebeu 0 quadros em 10 s. O dispositivo travou para todos os programas, e não foi um defeito do Jay-A.
+- **Os "0 blocos" intermitentes eram o microfone:** em 2026-11-07, o Jay-A abria o "Microfone (4- ME6S)" e o `state` saía, mas nenhum áudio vinha. O exemplo `mic_open` do Jay-C, abrindo o mesmo microfone por conta própria, recebeu 0 quadros em 10 s. O dispositivo travou para todos os programas, e não foi um defeito do Jay-A. Aconteceu de novo com o Jay-A 0.2.0 e o Jay-C 0.4.2 instalados (o Jay-C ficou em "Looking for Jay-A…"), e de novo voltou ao tirar e pôr o USB. A suspeita é a suspensão seletiva de USB do Windows ou o driver do headset.
+- **Aviso (depois da 0.2.0):** o laço do microfone tem um vigia. Depois de 1 s sem nenhum quadro do dispositivo, ele avisa (`MicEvent::Silent`), e a aba Filtros mostra "O microfone parou de mandar áudio. Tire e ponha o USB de novo, ou escolha outro." O aviso some quando os quadros voltam e vale também com o microfone aberto pelo Jay-C. O Jay-C não fica sabendo: hoje ele não mostra erros vindos do Jay-A.
 
 **Etapa 4, medido (2026-11-07):**
 - **`cargo test`:**
