@@ -6,6 +6,9 @@ import { createTabs } from './tabs.js';
 import { createFiltersPanel } from './filters.js';
 import { createSoundboardPanel } from './soundboard.js';
 import { createConvertPanel } from './convert.js';
+import { createEditorPanel } from './editor.js';
+import { createWelcomeModal } from './welcome-modal.js';
+import { shouldShowWelcome } from '../core/welcome.js';
 import { toggleTheme, currentTheme } from './theme.js';
 import { settings } from '../store/settings.js';
 import { resolveStyle } from '../core/style.js';
@@ -54,7 +57,7 @@ function radioGroup(key, attrs, options, renderOption) {
   return group;
 }
 
-function createSettingsPanel() {
+function createSettingsPanel(openWelcome) {
   // Each style option is a small preview drawn with that style's own tokens (styles/theme.css).
   const styleGroup = radioGroup(
     'style',
@@ -113,23 +116,16 @@ function createSettingsPanel() {
         { class: 'field' },
         h('p', { class: 'hint' }, t('Jay-A {version}', { version: __APP_VERSION__ })),
         h('p', { class: 'hint' }, t('Closing the window keeps Jay-A in the tray, next to the clock. To quit, right-click its icon there.')),
+        h('div', { class: 'button-row' }, h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => openWelcome() }, t('Show the tour'))),
       ),
     ),
-  );
-}
-
-function placeholder(title, text, stage) {
-  return h(
-    'section',
-    { class: 'app-panel' },
-    h('h1', {}, title),
-    h('div', { class: 'placeholder-card' }, h('p', {}, text), h('p', { class: 'hint' }, t('Coming in stage {n}.', { n: stage }))),
   );
 }
 
 const tabLabel = (icon, text) => h('span', { class: 'tab-label' }, h('span', { class: 'tab-icon', html: icon }), text);
 
 export function mountApp(root) {
+  const welcome = createWelcomeModal();
   const items = [
     { key: 'filters', label: tabLabel(icons.mic, t('Filters')), panel: createFiltersPanel() },
     {
@@ -140,14 +136,14 @@ export function mountApp(root) {
     {
       key: 'editor',
       label: tabLabel(icons.waveform, t('Editor')),
-      panel: placeholder(t('Editor'), t('Cut, fade, normalize and filter audio files, without touching the original.'), 6),
+      panel: createEditorPanel(),
     },
     {
       key: 'convert',
       label: tabLabel(icons.convert, t('Convert')),
       panel: createConvertPanel(),
     },
-    { key: 'settings', label: tabLabel(icons.settings, t('Settings')), panel: createSettingsPanel() },
+    { key: 'settings', label: tabLabel(icons.settings, t('Settings')), panel: createSettingsPanel(() => welcome.open()) },
   ];
   const tabs = createTabs({ idPrefix: 'section', label: t('Sections'), className: 'app-nav', vertical: true, items });
 
@@ -163,6 +159,12 @@ export function mountApp(root) {
     if (next.language !== prev.language) location.reload();
   });
 
-  root.replaceChildren(header, h('div', { class: 'app-body' }, tabs.list, h('div', { class: 'app-panels' }, items.map((i) => i.panel))));
+  root.replaceChildren(header, h('div', { class: 'app-body' }, tabs.list, h('div', { class: 'app-panels' }, items.map((i) => i.panel))), welcome.element);
   tabs.select('filters');
+  // The tour opens once by itself, marked seen as it opens (like Jay-C). Started with --background,
+  // it waits in the hidden window until the user opens it.
+  if (shouldShowWelcome(settings.get())) {
+    settings.update({ welcomeSeen: true });
+    welcome.open();
+  }
 }

@@ -4,6 +4,8 @@ import { settings } from './store/settings.js';
 import { setLanguage, resolveLanguage, t } from './core/i18n.js';
 
 setLanguage(resolveLanguage(settings.get().language));
+// Animations (the tour's scenes, its slides) follow Windows' "Animation effects" setting.
+document.documentElement.dataset.motion = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
 initTheme();
 mountApp(document.getElementById('app'));
 

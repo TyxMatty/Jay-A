@@ -281,19 +281,20 @@ fn run_mic(
 
     let mut watchdog = Watchdog { last: Instant::now(), silent: false };
     while !stop.load(Ordering::SeqCst) {
-        let signalled = event.wait_for_event(100).is_ok();
-        while signalled {
-            match capture.get_next_packet_size() {
-                Ok(Some(frames)) if frames > 0 => {
-                    if let Err(e) = capture.read_from_device_to_deque(&mut raw) {
+        if event.wait_for_event(100).is_ok() {
+            loop {
+                match capture.get_next_packet_size() {
+                    Ok(Some(frames)) if frames > 0 => {
+                        if let Err(e) = capture.read_from_device_to_deque(&mut raw) {
+                            on_event(MicEvent::Failed(format!("microphone failed: {e}")));
+                            return;
+                        }
+                    }
+                    Ok(_) => break,
+                    Err(e) => {
                         on_event(MicEvent::Failed(format!("microphone failed: {e}")));
                         return;
                     }
-                }
-                Ok(_) => break,
-                Err(e) => {
-                    on_event(MicEvent::Failed(format!("microphone failed: {e}")));
-                    return;
                 }
             }
         }

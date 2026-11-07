@@ -14,9 +14,9 @@ test('language preference: explicit, else from the system', () => {
 
 test('t() translates, falls back to English and fills placeholders', () => {
   setLanguage('en');
-  assert.equal(t('Coming in stage {n}.', { n: 4 }), 'Coming in stage 4.');
+  assert.equal(t('Step {n} of {total}', { n: 2, total: 7 }), 'Step 2 of 7');
   setLanguage('pt-BR');
-  assert.equal(t('Coming in stage {n}.', { n: 4 }), 'Chega na etapa 4.');
+  assert.equal(t('Step {n} of {total}', { n: 2, total: 7 }), 'Passo 2 de 7');
   assert.equal(t('a text nobody translated'), 'a text nobody translated');
   setLanguage('xx');
   assert.equal(t('Settings'), 'Settings');

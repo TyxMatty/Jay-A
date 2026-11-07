@@ -44,8 +44,12 @@ pub struct Request {
 }
 
 fn format_of(request: &Request) -> Result<Format, String> {
-    let q = request.quality;
-    Ok(match request.format.as_str() {
+    format_of_name(&request.format, request.quality)
+}
+
+/// "wav16" | "wav24" | "wav32" | "flac" | "mp3" | "ogg" | "opus", with the quality (kbps; OGG: q × 10).
+pub fn format_of_name(name: &str, q: Option<u32>) -> Result<Format, String> {
+    Ok(match name {
         "wav16" => Format::Wav { bits: 16 },
         "wav24" => Format::Wav { bits: 24 },
         "wav32" => Format::Wav { bits: 32 },

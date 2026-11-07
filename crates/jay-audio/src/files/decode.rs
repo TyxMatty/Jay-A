@@ -156,7 +156,7 @@ pub fn decode(path: &Path, max_seconds: f32) -> Result<Vec<f32>, String> {
     if rate == SAMPLE_RATE { Ok(stereo) } else { Ok(clean(resample(&stereo, rate)?)) }
 }
 
-fn resample(stereo: &[f32], rate: u32) -> Result<Vec<f32>, String> {
+pub(crate) fn resample(stereo: &[f32], rate: u32) -> Result<Vec<f32>, String> {
     let frames = stereo.len() / 2;
     let mut resampler = Fft::<f32>::new(rate as usize, SAMPLE_RATE as usize, 1024, 2, FixedSync::Input).map_err(|e| e.to_string())?;
     let input = InterleavedSlice::new(stereo, 2, frames).map_err(|e| e.to_string())?;

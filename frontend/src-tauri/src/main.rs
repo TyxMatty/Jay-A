@@ -9,6 +9,8 @@ mod audio;
 mod soundboard;
 #[cfg(windows)]
 mod convert;
+#[cfg(windows)]
+mod editor;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -107,6 +109,20 @@ fn main() {
             #[cfg(windows)]
             convert::convert_cancel,
             #[cfg(windows)]
+            editor::editor_open,
+            #[cfg(windows)]
+            editor::editor_view,
+            #[cfg(windows)]
+            editor::editor_edit,
+            #[cfg(windows)]
+            editor::editor_undo,
+            #[cfg(windows)]
+            editor::editor_play,
+            #[cfg(windows)]
+            editor::editor_stop,
+            #[cfg(windows)]
+            editor::editor_export,
+            #[cfg(windows)]
             soundboard::soundboard_update,
             #[cfg(windows)]
             soundboard::soundboard_remove,
@@ -164,6 +180,7 @@ fn main() {
                 app.manage(soundboard::SoundboardState::load(config_dir, app.path().app_data_dir()?));
                 soundboard::register_hotkeys(app.handle());
                 app.manage(convert::ConvertState::default());
+                app.manage(editor::EditorState::default());
             }
             // The window starts hidden (tauri.conf.json), so --background never flashes it.
             if !background(&std::env::args().collect::<Vec<_>>()) {

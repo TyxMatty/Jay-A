@@ -569,18 +569,7 @@ fieldset > h3 {
   font-size: 22px;
 }
 
-.placeholder-card {
-  max-width: 560px;
-  padding: 18px 20px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
-}
 
-.placeholder-card > p {
-  margin: 0 0 8px;
-}
 
 /* The cards side by side in a wide window (Microphone | Effect chain), one column in a narrow one;
    centered either way. */
@@ -1004,4 +993,233 @@ fieldset > h3 {
 }
 .convert-item.error .hint {
   color: var(--danger);
+}
+
+/* ---------- Welcome tour (ui/welcome-modal.js), from Jay-C ---------- */
+
+.modal {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow);
+}
+
+.modal::backdrop {
+  background: var(--backdrop);
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Welcome tour (ui/welcome-modal.js): one centered card per step. */
+.welcome-modal {
+  width: min(520px, calc(100vw - 32px));
+}
+
+.welcome-modal[open] > form {
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 34px);
+}
+
+.welcome-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 20px 20px 16px;
+  overflow-y: auto;
+  text-align: center;
+}
+
+.welcome-art {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 168px;
+  flex-shrink: 0;
+  border-radius: var(--radius-lg);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface));
+  color: var(--accent-text, var(--accent));
+}
+
+.welcome-art svg {
+  width: min(100%, 240px);
+  height: 140px;
+}
+
+/* Welcome art (ui/welcome-art.js): theme colors; the accent is currentColor. */
+.wa-card { fill: var(--surface); stroke: var(--border); stroke-width: 1.5; }
+.wa-fill-accent { fill: currentColor; }
+.wa-fill-surface { fill: var(--surface); }
+.wa-fill-muted { fill: var(--surface-2); stroke: var(--border); }
+.wa-fill-green { fill: #16a34a; }
+.wa-fill-red { fill: #dc2626; }
+.wa-stroke-accent { stroke: currentColor; stroke-width: 4; }
+.wa-stroke-muted { stroke: var(--text-muted); stroke-width: 4; opacity: 0.5; }
+.wa-stroke-text { stroke: var(--text); stroke-width: 5; }
+.wa-stroke-surface { stroke: var(--surface); stroke-width: 5; }
+.wa-link { stroke: var(--text-muted); stroke-width: 2.5; stroke-dasharray: 6 6; opacity: 0.6; }
+.wa-ring,
+.wa-speaking { stroke: #16a34a; stroke-width: 3; }
+.wa-dim { opacity: 0.35; }
+.wa-faded { opacity: 0.55; }
+
+.welcome-content {
+  display: grid;
+  align-content: start; /* the extra min-height (welcome-modal.js fitHeight) goes below the text */
+  gap: 6px;
+}
+
+.welcome-counter {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.welcome-title {
+  margin: 0;
+  font-size: 22px;
+}
+
+.welcome-text {
+  margin: 0;
+  max-width: 42ch;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.welcome-dots {
+  display: flex;
+  gap: 4px;
+}
+
+/* 24px hit area around an 8px dot; the current step stretches into a pill. */
+.welcome-dot {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.welcome-dot::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.welcome-dot[aria-current='step']::before {
+  width: 20px;
+  background: var(--accent);
+}
+
+.welcome-dot:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 999px;
+}
+
+.welcome-footer {
+  align-items: center;
+}
+
+.welcome-spacer {
+  flex: 1;
+}
+
+.wa-label { fill: var(--text); font: 600 12px var(--font, system-ui); }
+.wa-select { fill: color-mix(in srgb, currentColor 22%, transparent); stroke: currentColor; stroke-width: 1.5; }
+
+/* Welcome tour art (ui/welcome-art.js): each scene moves a little, on a loop. `--d` staggers. */
+:root[data-motion='full'] .welcome-art :is(.wa-pulse, .wa-pop, .wa-walk, .wa-bounce, .wa-slide, .wa-float) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+:root[data-motion='full'] .welcome-art .wa-pulse { animation: wa-pulse 1.4s ease-in-out infinite; }
+:root[data-motion='full'] .welcome-art .wa-wave { animation: wa-wave 1.4s ease-in-out var(--d, 0ms) infinite; }
+:root[data-motion='full'] .welcome-art .wa-pop { animation: wa-pop 420ms cubic-bezier(0.3, 1.5, 0.6, 1) var(--d, 0ms) both; }
+:root[data-motion='full'] .welcome-art .wa-walk { animation: wa-walk 600ms ease-out var(--d, 0ms) both; }
+:root[data-motion='full'] .welcome-art .wa-flow { animation: wa-flow 900ms linear infinite; }
+:root[data-motion='full'] .welcome-art .wa-blink { animation: wa-blink 1.2s ease-in-out infinite alternate; }
+:root[data-motion='full'] .welcome-art .wa-caret { animation: wa-blink 600ms steps(2) infinite; }
+:root[data-motion='full'] .welcome-art .wa-hue { animation: wa-hue 6s linear infinite; }
+:root[data-motion='full'] .welcome-art .wa-bounce { animation: wa-bounce 1.6s ease-in-out var(--d, 0ms) infinite; }
+:root[data-motion='full'] .welcome-art .wa-slide { animation: wa-slide 2.4s ease-in-out infinite alternate; }
+:root[data-motion='full'] .welcome-art .wa-float { animation: wa-float 2s ease-in-out infinite alternate; }
+:root[data-motion='full'] .welcome-art .wa-speaking { animation: wa-blink 1s ease-in-out infinite alternate; }
+
+@keyframes wa-pulse { 50% { scale: 1.12; opacity: 0.4; } }
+@keyframes wa-wave { 0%, 100% { opacity: 0; } 50% { opacity: 1; } }
+@keyframes wa-pop { from { scale: 0; opacity: 0; } }
+@keyframes wa-walk { from { translate: 40px 0; opacity: 0; } }
+@keyframes wa-flow { to { stroke-dashoffset: -24; } }
+@keyframes wa-blink { to { opacity: 0.3; } }
+@keyframes wa-hue { to { filter: hue-rotate(360deg); } }
+@keyframes wa-bounce { 0%, 60%, 100% { translate: 0 0; } 30% { translate: 0 -5px; } }
+@keyframes wa-slide { to { translate: 60px -24px; } }
+@keyframes wa-float { from { translate: 0 -4px; } to { translate: 0 4px; } }
+:root[data-motion='full'] .welcome-art .wa-slide-x { animation: wa-slide-x 2.4s ease-in-out infinite alternate; }
+@keyframes wa-slide-x { from { translate: -18px 0; } to { translate: 18px 0; } }
+
+/* Editor (ui/editor.js): the waveform spans both columns' width. */
+.editor-panel .editor-main {
+  grid-column: 1 / -1;
+}
+.editor-wave {
+  display: block;
+  width: 100%;
+  height: 160px;
+  margin: 12px 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface-2);
+  cursor: text;
+  touch-action: none;
+}
+.editor-range {
+  display: flex;
+  gap: 12px;
+}
+.editor-range .field {
+  flex: 1;
+}
+.editor-panel .button-row {
+  margin-bottom: 12px;
+  align-items: flex-end;
 }
