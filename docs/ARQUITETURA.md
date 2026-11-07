@@ -93,6 +93,7 @@ flowchart LR
 | Por que não ffmpeg | — | Um ffmpeg completo tem ~80–130 MB, e a linha Jay é leve (o Jay-C tem 3,9 MB). E os efeitos dos arquivos seriam filtros do ffmpeg, diferentes dos do microfone: duas implementações. Com o engine próprio, **a mesma cadeia de filtros serve ao vivo e nos arquivos**. |
 | Atalhos globais | `tauri-plugin-global-shortcut` | Tocar o soundboard com um jogo em foco. |
 | Bandeja e instância única | `tray-icon` do Tauri + `tauri-plugin-single-instance` | O Jay-C pode iniciar o Jay-A sem abrir um segundo engine. |
+| Atualização automática | **`tauri-plugin-updater`**, com o `latest.json` do último release do GitHub e instaladores assinados (minisign; a chave pública fica no `tauri.conf.json`) | Pedido do usuário. O Jay-A procura ao abrir e a cada 6 h, baixa em segundo plano e só instala com o microfone livre: instalar fecha o Jay-A por alguns segundos, e no meio de uma chamada a voz passaria para a reserva do Jay-C. O instalador abre o Jay-A de novo com os mesmos argumentos (`--background` também). O workflow `release.yml` faz um release rascunho num tag `v*`; publicar o rascunho é o que entrega a atualização. |
 | Persistência | **`config.json`** na pasta de configuração do app, lido pelo engine | O engine precisa dos filtros mesmo com a janela fechada, então a configuração não pode ficar no `localStorage` da página (como no Jay-C). A UI lê e grava por comandos. A cadeia fica no `chain.json` (desde a 2c) e os presets do usuário em `presets/`; as opções do microfone (dispositivo, supressão de ruído, ganho automático) foram para o `config.json` na etapa 3. No `localStorage` ficam só as preferências da UI e o "Ouvir meu microfone". |
 | Formato interno | 48 kHz, f32, quadros de 10 ms (480 amostras) | É o quadro do APM e do RNNoise. O link entrega blocos de 20 ms, como o microfone nativo do Jay-C hoje. |
 
@@ -606,6 +607,13 @@ Cada etapa termina com algo testável.
   - **O eco sendo tirado numa chamada:** o probe não tem WebView2, então o cancelamento ficou desligado nele (a tela avisa). O teste de eco da etapa 1 mede o AEC; falta a chamada de verdade (I5).
   - **Fechar o Jay-A no meio da chamada** e o som de outros apps sem abafar: também na I5.
 - **Atalho conhecido:** um microfone que falha no meio da chamada (desconectado) só avisa a tela. O Jay-C nota a falta de `AUDIO` e fica na reserva até reconectar.
+
+**Atualização automática, medido (2026-11-06)** (antes de seguir com a etapa 3, a pedido do usuário):
+- **Teste local de ponta a ponta,** com builds de debug assinadas: a 0.1.1 instalada e a 0.1.2 servida por um servidor local (`JAYA_UPDATE_URL`, só nas builds de debug), que demorava 5 s para responder o `latest.json`. Nesse tempo, o `jay_a_probe` abriu o microfone.
+  - A 0.1.1 baixou a 0.1.2 logo no começo e esperou o probe terminar (22:25:58) para instalar.
+  - A 0.1.2 estava rodando às 22:26:14, com `--background`, e o registro do Windows mostrava 0.1.2.
+- **A chave privada** fica fora do repositório (`%USERPROFILE%\.tauri\jay-a.key`) e nos secrets do GitHub. Sem ela, o `npm run build` falha, porque o build assina o instalador.
+- **Ponto aberto, achado no mesmo teste:** duas vezes, o Jay-A recém-instalado abriu o microfone e mandou o `state`, mas nenhum `AUDIO` chegou ao probe. Nas duas, o updater estava ativo. Depois, oito probes seguidos (dev, instalado aberto pelo bash e pelo `Start-Process`) passaram, e não foi reproduzido. Pode ser o mesmo "Jay-A isn't responding" que o Jay-C mostrou com o Jay-A instalado. Sem log no app instalado, a causa não foi achada.
 
 ## 13. Decisões em aberto
 

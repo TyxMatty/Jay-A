@@ -26,6 +26,14 @@ The Rust build takes several GB. To keep it out of OneDrive, create a `.cargo/co
 target-dir = "C:/Users/<you>/.cargo-target/jay-a"
 ```
 
+## Releases and updates
+
+Installed copies update themselves: at start and every 6 hours they read `latest.json` from the latest GitHub release, download a newer installer (signed, and checked against the public key in `tauri.conf.json`) and install it once the microphone is free.
+
+To release, push a `v*` tag: the Release workflow builds and signs the installer and creates a draft release. Publishing the draft is what delivers the update. The workflow needs two repository secrets: `TAURI_SIGNING_PRIVATE_KEY` (the private key's contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (empty if it has none).
+
+`npm run build` signs the installer too, so it needs the private key: set `TAURI_SIGNING_PRIVATE_KEY` to the key file's path (or its contents) and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Keep a backup of the key: without it, the installed copies can't be updated anymore.
+
 ## Tests
 
 ```bash

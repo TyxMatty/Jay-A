@@ -5,6 +5,8 @@
 
 #[cfg(windows)]
 mod audio;
+#[cfg(windows)]
+mod updater;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -44,6 +46,7 @@ fn main() {
                 show_main(app);
             }
         }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             set_tray_labels,
             #[cfg(windows)]
@@ -77,7 +80,9 @@ fn main() {
             #[cfg(windows)]
             audio::preset_save,
             #[cfg(windows)]
-            audio::preset_delete
+            audio::preset_delete,
+            #[cfg(windows)]
+            updater::update_state
         ])
         .on_window_event(|window, event| {
             // Closing the window keeps Jay-A in the tray, so the filters keep working during calls.
@@ -119,6 +124,7 @@ fn main() {
                 app.manage(audio::MicState::load(&config_dir));
                 app.manage(audio::ChainState::load(&config_dir));
                 audio::start_link(app.handle());
+                updater::start(app.handle());
             }
             // The window starts hidden (tauri.conf.json), so --background never flashes it.
             if !background(&std::env::args().collect::<Vec<_>>()) {

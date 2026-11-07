@@ -26,6 +26,14 @@ O build do Rust gera vários GB. Para não ir para o OneDrive, crie um `.cargo/c
 target-dir = "C:/Users/<você>/.cargo-target/jay-a"
 ```
 
+## Releases e atualizações
+
+As cópias instaladas se atualizam sozinhas: ao abrir e a cada 6 horas, elas leem o `latest.json` do último release do GitHub, baixam um instalador mais novo (assinado e conferido com a chave pública do `tauri.conf.json`) e o instalam assim que o microfone estiver livre.
+
+Para lançar uma versão, faça push de um tag `v*`: o workflow Release compila e assina o instalador e cria um release rascunho. Publicar o rascunho é o que entrega a atualização. O workflow precisa de dois secrets do repositório: `TAURI_SIGNING_PRIVATE_KEY` (o conteúdo da chave privada) e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` (vazio se ela não tem senha).
+
+O `npm run build` também assina o instalador, então precisa da chave privada: defina `TAURI_SIGNING_PRIVATE_KEY` com o caminho do arquivo da chave (ou o conteúdo dela) e `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`. Guarde um backup da chave: sem ela, as cópias instaladas não podem mais ser atualizadas.
+
 ## Testes
 
 ```bash
