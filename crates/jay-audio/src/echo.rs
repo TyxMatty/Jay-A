@@ -14,7 +14,7 @@ use windows::Win32::System::Diagnostics::ToolHelp::{CreateToolhelp32Snapshot, PR
 use crate::{CHUNK_FRAMES, SAMPLE_RATE};
 
 /// What was played and not yet given to the echo canceller (mono, 48 kHz).
-pub(crate) type Played = Arc<Mutex<VecDeque<f32>>>;
+pub type Played = Arc<Mutex<VecDeque<f32>>>;
 
 /// More than this waiting (the mic stalled) and the queue drops back to 40 ms, like Jay-C's.
 const MAX_QUEUED: usize = CHUNK_FRAMES * 5;

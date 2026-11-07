@@ -4,6 +4,7 @@ import { h } from './dom.js';
 import { icons } from './icons.js';
 import { createTabs } from './tabs.js';
 import { createFiltersPanel } from './filters.js';
+import { createSoundboardPanel } from './soundboard.js';
 import { toggleTheme, currentTheme } from './theme.js';
 import { settings } from '../store/settings.js';
 import { resolveStyle } from '../core/style.js';
@@ -133,7 +134,7 @@ export function mountApp(root) {
     {
       key: 'soundboard',
       label: tabLabel(icons.pads, t('Soundboard')),
-      panel: placeholder(t('Soundboard'), t('Clips that play in the call and in your headphones, with a click or a global shortcut.'), 4),
+      panel: createSoundboardPanel(),
     },
     {
       key: 'editor',

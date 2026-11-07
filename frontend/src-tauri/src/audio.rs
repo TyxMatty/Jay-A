@@ -9,6 +9,7 @@
 //! Saved in the app's config folder: the mic's settings in `config.json`, the chain in
 //! `chain.json` (after every change), user presets as files in `presets/`.
 
+use std::collections::VecDeque;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::sync_channel;
@@ -19,6 +20,8 @@ use jay_audio::dsp::chain::{ChainControl, ChainSpec};
 use jay_audio::dsp::params::COMMON;
 use jay_audio::dsp::{Meters, effect, output_limiter, preset};
 use jay_audio::link::{LinkEvent, LinkServer, PIPE};
+use jay_audio::playback::echo_queue;
+use jay_audio::soundboard::{self, Player};
 use jay_audio::{Mic, MicDevice, MicOptions};
 use serde_json::{Value, json};
 use tauri::ipc::Channel;
@@ -43,6 +46,10 @@ struct Engine {
     monitor: bool,
     link: Option<LinkServer>,
     jay_c: Option<JayC>,
+    /// The soundboard's voices in the call: the open mic's mixer.
+    call: Option<Player>,
+    /// What the soundboard plays in the headphones, for the echo canceller (soundboard.rs).
+    board_echo: Arc<Mutex<VecDeque<f32>>>,
 }
 
 /// The Jay-C connected now.
@@ -63,7 +70,8 @@ impl MicState {
             .and_then(|text| serde_json::from_str::<Value>(text).ok())
             .and_then(|v| serde_json::from_value(v["mic"].clone()).ok())
             .unwrap_or_default();
-        MicState { engine: Mutex::new(Engine { options, fresh: saved.is_none(), ..Engine::default() }), config }
+        let engine = Engine { options, fresh: saved.is_none(), board_echo: echo_queue(), ..Engine::default() };
+        MicState { engine: Mutex::new(engine), config }
     }
 
     fn lock(&self) -> Result<MutexGuard<'_, Engine>, String> {
@@ -71,7 +79,7 @@ impl MicState {
     }
 
     fn save(&self, engine: &mut Engine, options: MicOptions) -> Result<(), String> {
-        write(&self.config, &serde_json::to_string_pretty(&json!({ "mic": options })).map_err(|e| e.to_string())?)?;
+        config_set(&self.config, "mic", json!(options))?;
         engine.options = options;
         engine.fresh = false;
         Ok(())
@@ -86,6 +94,18 @@ impl MicState {
         let _ = engine.sync(chain);
         was
     }
+
+    /// Where the soundboard's call voices go: the mic's mixer, only while Jay-C uses the mic (the
+    /// page's test doesn't send them anywhere).
+    pub fn call_player(&self) -> Option<Player> {
+        let engine = self.lock().ok()?;
+        engine.jay_c.as_ref().filter(|j| j.wants_mic)?;
+        engine.call.clone()
+    }
+
+    pub fn board_echo(&self) -> Arc<Mutex<VecDeque<f32>>> {
+        self.lock().map(|e| e.board_echo.clone()).unwrap_or_else(|_| echo_queue())
+    }
 }
 
 impl Engine {
@@ -97,8 +117,11 @@ impl Engine {
         if self.opened != wanted {
             self.mic = None;
             self.opened = None;
+            self.call = None;
             if let Some((options, echo_of)) = wanted.clone() {
-                let mic = self.open(options, echo_of, chain)?;
+                let (call, mixer) = soundboard::mixer();
+                let mic = self.open(options, echo_of, chain, mixer)?;
+                self.call = Some(call);
                 if let Some(link) = &self.link {
                     // Jay-C's reserve follows the mic we use.
                     link.set_state(json!({ "type": "state", "device": mic.device, "deviceId": mic.device_id, "preset": null }));
@@ -113,7 +136,7 @@ impl Engine {
         }
     }
 
-    fn open(&self, options: MicOptions, echo_of: Option<u32>, chain: &ChainState) -> Result<Mic, String> {
+    fn open(&self, options: MicOptions, echo_of: Option<u32>, chain: &ChainState, call: soundboard::Mixer) -> Result<Mic, String> {
         let runner = chain.lock()?.runner();
         // The audio thread hands its meters over without allocating; this thread makes the JSON for
         // the page's test, keeping the loudest values between two sends. It ends with the mic.
@@ -152,6 +175,8 @@ impl Engine {
             options,
             echo_of,
             runner,
+            Some(call),
+            self.board_echo.clone(),
             move |chunk, m| {
                 if let Some(link) = &link {
                     link.push(chunk); // dropped unless Jay-C asked for the mic
@@ -278,8 +303,15 @@ impl ChainState {
     }
 }
 
+/// Sets `key` in config.json, keeping the other keys (the mic's, the soundboard's).
+pub fn config_set(path: &Path, key: &str, value: Value) -> Result<(), String> {
+    let mut config: Value = fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).filter(Value::is_object).unwrap_or_else(|| json!({}));
+    config[key] = value;
+    write(path, &serde_json::to_string_pretty(&config).map_err(|e| e.to_string())?)
+}
+
 /// Writes through a temporary file, so a crash mid-write never leaves half a file.
-fn write(path: &Path, text: &str) -> Result<(), String> {
+pub fn write(path: &Path, text: &str) -> Result<(), String> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     }
@@ -479,7 +511,7 @@ pub fn preset_delete(chain: State<'_, ChainState>, id: String) -> Result<(), Str
 }
 
 /// A preset's file name from its name: lowercase letters, digits and dashes only.
-fn file_id(name: &str) -> String {
+pub(crate) fn file_id(name: &str) -> String {
     let mut id = String::new();
     for c in name.to_lowercase().chars() {
         if c.is_ascii_alphanumeric() {

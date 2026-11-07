@@ -5,6 +5,8 @@
 
 #[cfg(windows)]
 mod audio;
+#[cfg(windows)]
+mod soundboard;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -13,6 +15,7 @@ use tauri::{AppHandle, Emitter, Manager, State, WindowEvent, Wry};
 /// The tray menu's items: built in English, relabelled by the page in its language.
 struct TrayItems {
     open: MenuItem<Wry>,
+    stop: MenuItem<Wry>,
     quit: MenuItem<Wry>,
 }
 
@@ -30,8 +33,9 @@ fn background(args: &[String]) -> bool {
 }
 
 #[tauri::command]
-fn set_tray_labels(open: String, quit: String, items: State<'_, TrayItems>) -> Result<(), String> {
+fn set_tray_labels(open: String, stop: String, quit: String, items: State<'_, TrayItems>) -> Result<(), String> {
     items.open.set_text(open).map_err(|e| e.to_string())?;
+    items.stop.set_text(stop).map_err(|e| e.to_string())?;
     items.quit.set_text(quit).map_err(|e| e.to_string())
 }
 
@@ -44,6 +48,7 @@ fn main() {
                 show_main(app);
             }
         }))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             set_tray_labels,
             #[cfg(windows)]
@@ -77,7 +82,21 @@ fn main() {
             #[cfg(windows)]
             audio::preset_save,
             #[cfg(windows)]
-            audio::preset_delete
+            audio::preset_delete,
+            #[cfg(windows)]
+            soundboard::soundboard_state,
+            #[cfg(windows)]
+            soundboard::soundboard_import,
+            #[cfg(windows)]
+            soundboard::soundboard_update,
+            #[cfg(windows)]
+            soundboard::soundboard_remove,
+            #[cfg(windows)]
+            soundboard::soundboard_settings,
+            #[cfg(windows)]
+            soundboard::soundboard_play,
+            #[cfg(windows)]
+            soundboard::soundboard_stop
         ])
         .on_window_event(|window, event| {
             // Closing the window keeps Jay-A in the tray, so the filters keep working during calls.
@@ -94,8 +113,9 @@ fn main() {
         })
         .setup(|app| {
             let open = MenuItem::with_id(app, "open", "Open Jay-A", true, None::<&str>)?;
+            let stop = MenuItem::with_id(app, "stop", "Stop soundboard", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let menu = Menu::with_items(app, &[&open, &stop, &quit])?;
             TrayIconBuilder::with_id("main")
                 .icon(app.default_window_icon().cloned().expect("the app icon"))
                 .tooltip("Jay-A")
@@ -103,6 +123,8 @@ fn main() {
                 .show_menu_on_left_click(false)
                 .on_menu_event(|app, event| match event.id.as_ref() {
                     "open" => show_main(app),
+                    #[cfg(windows)]
+                    "stop" => app.state::<soundboard::SoundboardState>().stop_all(&app.state::<audio::MicState>()),
                     "quit" => app.exit(0),
                     _ => {}
                 })
@@ -112,13 +134,15 @@ fn main() {
                     }
                 })
                 .build(app)?;
-            app.manage(TrayItems { open, quit });
+            app.manage(TrayItems { open, stop, quit });
             #[cfg(windows)]
             {
                 let config_dir = app.path().app_config_dir()?;
                 app.manage(audio::MicState::load(&config_dir));
                 app.manage(audio::ChainState::load(&config_dir));
                 audio::start_link(app.handle());
+                app.manage(soundboard::SoundboardState::load(config_dir, app.path().app_data_dir()?));
+                soundboard::register_hotkeys(app.handle());
             }
             // The window starts hidden (tauri.conf.json), so --background never flashes it.
             if !background(&std::env::args().collect::<Vec<_>>()) {

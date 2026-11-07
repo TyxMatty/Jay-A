@@ -9,6 +9,8 @@ pub const SAMPLE_RATE: u32 = 48_000;
 pub const CHUNK_FRAMES: usize = 960;
 
 pub mod dsp;
+pub mod files;
+pub mod soundboard;
 
 /// Jay-C's file as is (plugins/tauri-plugin-system-audio/src/apm.rs), so fixes copy over unchanged.
 #[cfg(windows)]
@@ -21,6 +23,8 @@ pub mod link;
 mod mic;
 #[cfg(windows)]
 mod monitor;
+#[cfg(windows)]
+pub mod playback;
 
 #[cfg(windows)]
 pub use mic::{Mic, MicDevice, MicOptions, list_mics};

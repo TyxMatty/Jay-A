@@ -20,6 +20,7 @@ use wasapi::{AudioCaptureClient, AudioClient, DeviceEnumerator, Direction, Handl
 use crate::apm::Apm;
 use crate::dsp::chain::{ChainRunner, MAX_SLOTS};
 use crate::echo::{EchoReference, Played, webview_of};
+use crate::soundboard::Mixer;
 use crate::dsp::{Meters, output_limiter};
 use crate::monitor::Monitor;
 use crate::{CHUNK_FRAMES, SAMPLE_RATE, level_db};
@@ -83,13 +84,17 @@ impl Drop for Mic {
 
 impl Mic {
     /// Opens the mic, running `chain` on it. `echo_of`: Jay-C's process, while Jay-C uses the mic;
-    /// what its WebView2 plays is then removed from the mic. `on_chunk` gets each 20 ms chunk and
-    /// the levels, on the audio thread (it must not allocate or wait: e.g. `try_send` to another
-    /// thread); `on_error` a failure after the start (e.g. the mic was unplugged; the capture ends).
+    /// what its WebView2 plays, and what the soundboard plays (`soundboard_echo`), is then removed
+    /// from the mic. `soundboard`: the call's soundboard voices, mixed in after the chain. `on_chunk`
+    /// gets each 20 ms chunk and the levels, on the audio thread (it must not allocate or wait: e.g.
+    /// `try_send` to another thread); `on_error` a failure after the start (e.g. the mic was
+    /// unplugged; the capture ends).
     pub fn start(
         options: MicOptions,
         echo_of: Option<u32>,
         chain: ChainRunner,
+        soundboard: Option<Mixer>,
+        soundboard_echo: Played,
         on_chunk: impl FnMut(&[f32; CHUNK_FRAMES], &Meters) + Send + 'static,
         on_error: impl Fn(String) + Send + 'static,
     ) -> Result<Mic, String> {
@@ -108,7 +113,8 @@ impl Mic {
             .name("jay-audio-mic".into())
             .spawn({
                 let (stop, monitor) = (stop.clone(), monitor.clone());
-                move || run_mic(options, played, chain, &stop, &monitor, ready_tx, on_chunk, on_error)
+                let audio = Audio { chain, soundboard, played, soundboard_echo };
+                move || run_mic(options, audio, &stop, &monitor, ready_tx, on_chunk, on_error)
             })
             .map_err(|e| e.to_string())?;
         match ready_rx.recv() {
@@ -183,11 +189,18 @@ fn open_device(device: wasapi::Device) -> Result<OpenMic, String> {
     Ok((name, id, client, capture, event))
 }
 
-#[allow(clippy::too_many_arguments)]
+/// What the mic thread mixes and cancels besides the mic.
+struct Audio {
+    chain: ChainRunner,
+    soundboard: Option<Mixer>,
+    /// What Jay-C plays (none: echo cancellation off).
+    played: Option<Played>,
+    soundboard_echo: Played,
+}
+
 fn run_mic(
     options: MicOptions,
-    played: Option<Played>,
-    mut chain: ChainRunner,
+    Audio { mut chain, mut soundboard, played, soundboard_echo }: Audio,
     stop: &AtomicBool,
     monitor: &Mutex<Option<Monitor>>,
     ready: mpsc::Sender<Result<(String, String), String>>,
@@ -249,15 +262,20 @@ fn run_mic(
         drop(bytes);
 
         while pending.len() >= frame {
-            // The echo canceller first gets everything Jay-C played since the last frame. A busy
-            // lock (the reference thread adding to it) just leaves it for the next frame.
+            // The echo canceller first gets everything played since the last frame: Jay-C's call
+            // and the soundboard, summed (either may be silent, with nothing queued). A busy lock
+            // (a playing thread adding to it) just leaves it for the next frame.
             if let Some(played) = &played
-                && let Ok(mut queue) = played.try_lock()
+                && let Ok(mut call) = played.try_lock()
+                && let Ok(mut board) = soundboard_echo.try_lock()
             {
                 let n = render.len();
-                while queue.len() >= n {
-                    for (r, p) in render.iter_mut().zip(queue.drain(..n)) {
-                        *r = p;
+                while call.len() >= n || board.len() >= n {
+                    render.fill(0.0);
+                    for queue in [&mut *call, &mut *board] {
+                        if queue.len() >= n {
+                            render.iter_mut().zip(queue.drain(..n)).for_each(|(r, p)| *r += p);
+                        }
                     }
                     apm.process_render(&render);
                 }
@@ -267,6 +285,9 @@ fn run_mic(
             }
             apm.process_capture(&mut samples, 0); // AEC3 estimates the speaker->mic delay itself
             chain.process(&mut samples);
+            if let Some(soundboard) = &mut soundboard {
+                soundboard.mix(&mut samples, 1); // after the chain: no gate or noise removal on clips
+            }
             limiter.process(&mut samples);
             chunk[filled..filled + frame].copy_from_slice(&samples);
             filled += frame;

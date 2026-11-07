@@ -119,8 +119,9 @@ Jay-A/
 │     │                          # 2b ✅: effects/ biquad, filter, eq, gate, compressor, deesser, limiter;
 │     │                          # 2d ✅: effects/denoise (DeepFilterNet, RNNoise); 7: pitch, robot, reverb
 │     ├─ presets/                # os presets que vêm com o app (clean-voice, podcast, noise-only, radio)
-│     ├─ soundboard.rs           # biblioteca, vozes, mistura
-│     ├─ files/                  # decode.rs, encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
+│     ├─ soundboard.rs           # 4: as vozes e a mistura (Mixer, Player)
+│     ├─ playback.rs             # 4: o soundboard nos fones, que também vai para a referência de eco
+│     ├─ files/                  # 4: decode.rs; depois encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
 │     └─ link.rs                 # 3 ✅: servidor do Jay Link (pipe, protocolo, segurança)
 ├─ scripts/                      # dev-debug.ps1 (app com depuração na porta 9224) e cdp-eval.mjs (roda JS no app), do Jay-C;
 │                                # make-speech.ps1 (fala com as vozes do Windows, para avaliar a remoção de ruído)
@@ -415,6 +416,13 @@ flowchart TD
 - **Parar tudo:** botão, atalho global e item na bandeja.
 - **Atalhos:** conflito com outro app → o registro falha e a UI mostra qual atalho não foi aceito.
 
+**Como ficou (etapa 4):**
+- **Engine:** `files/decode.rs` decodifica (symphonia) e reamostra (rubato) para 48 kHz estéreo. `soundboard.rs` tem o `Mixer` de cada destino, numa thread de áudio, e o `Player`, que manda tocar de qualquer thread. A mistura não aloca nem espera lock.
+- **Na chamada:** cada abertura do microfone ganha um `Mixer`, misturado depois da cadeia e antes do limitador. Assim, o gate e a remoção de ruído não mexem nos clipes, e o limitador continua segurando −1 dBFS. Só toca enquanto o Jay-C usa o microfone; o teste da tela não manda os clipes para lugar nenhum.
+- **Nos fones:** `playback.rs` abre a saída padrão em estéreo só quando um clipe toca, e a fecha depois de 5 s sem voz. A própria thread de saída mistura as vozes quando o dispositivo pede, sem fila.
+- **Eco:** o que o soundboard toca entra, em mono, numa fila que o microfone soma à referência do Jay-C antes do `process_render`.
+- **App:** `src-tauri/src/soundboard.rs` cuida de importar (o arquivo vai pela IPC como bytes crus, é conferido decodificando e é copiado para `soundboard/`), dos atalhos globais (`tauri-plugin-global-shortcut`) e do item "Parar o soundboard" na bandeja. A aba é a `ui/soundboard.js`.
+
 ## 8. Editor de áudio
 
 ```mermaid
@@ -616,6 +624,18 @@ Cada etapa termina com algo testável.
   - num teste isolado com a cadeia do usuário, os blocos chegaram até 83 ms um do outro, com e sem cancelamento de eco.
 - **Correção:** as threads do microfone, da referência de eco, do DeepFilterNet e do link se registram no MMCSS do Windows ("Pro Audio", `audio_thread_priority` no `lib.rs`). Com a CPU ainda em 100%, o máximo caiu para 22 ms (p99 de 21 ms), e o Jay-C mostrou "Jay-A ligado".
 - **Falta:** a chamada de verdade (a I5 do Jay-C).
+- **Os "0 blocos" intermitentes eram o microfone:** em 2026-11-07, o Jay-A abria o "Microfone (4- ME6S)" e o `state` saía, mas nenhum áudio vinha. O exemplo `mic_open` do Jay-C, abrindo o mesmo microfone por conta própria, recebeu 0 quadros em 10 s. O dispositivo travou para todos os programas, e não foi um defeito do Jay-A.
+
+**Etapa 4, medido (2026-11-07):**
+- **`cargo test`:**
+  - **Decodificação:** um WAV mono de 44,1 kHz vira 48 kHz estéreo com o tom de 1 kHz intacto (±0,02), e não deslocado. Estéreo a 48 kHz passa igual. Arquivo longo demais, texto fingindo ser MP3 e arquivo inexistente viram erro, sem panic.
+  - **Mixer:** o clipe toca uma vez no ganho certo. A chamada recebe a média de esquerda e direita. A nona voz faz a mais antiga sumir em 10 ms, sem degrau. "Parar tudo" silencia em 10 ms. Misturar não aloca: com `Vec::new()` no lugar da reserva, o teste falha.
+- **No app de dev, pela depuração remota:**
+  - **Import:** um WAV importado vira o clipe "Bipe de teste", copiado para `soundboard/` e salvo no `config.json` sem apagar a chave `mic`. Um texto com nome `.mp3` é recusado.
+  - **Atalho e play:** o atalho Ctrl+Alt+F9 foi registrado. Tocar respondeu em 35 ms, e a aba mostra o card com tocar, nome, volume, atalho e remover.
+- **Não visto:**
+  - **O clipe chegando à chamada:** o microfone (ME6S) estava travado, e o probe não recebeu nenhum bloco.
+  - **O eco com alto-falantes** e **o atalho com um jogo em foco.**
 
 ## 13. Decisões em aberto
 

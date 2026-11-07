@@ -901,3 +901,60 @@ fieldset > h3 {
 .param-unit {
   min-width: 3.2em;
 }
+
+/* Soundboard (ui/soundboard.js) */
+.clip-drop {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 16px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-control);
+}
+.clip-drop.over {
+  border-color: var(--accent);
+}
+.clip-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.clip-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+}
+.clip-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.clip-name {
+  flex: 1;
+  min-width: 0;
+}
+.volume-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.volume-row input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+.volume-value {
+  min-width: 52px;
+  text-align: right;
+}
+.shortcut-btn.listening {
+  border-color: var(--accent);
+}
+.hint.warning {
+  color: var(--danger, #e5484d);
+}

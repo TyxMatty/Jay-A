@@ -10,7 +10,7 @@ mountApp(document.getElementById('app'));
 if ('__TAURI_INTERNALS__' in window) {
   // The tray menu is built in Rust, which doesn't know the page's language.
   import('@tauri-apps/api/core')
-    .then(({ invoke }) => invoke('set_tray_labels', { open: t('Open Jay-A'), quit: t('Quit') }))
+    .then(({ invoke }) => invoke('set_tray_labels', { open: t('Open Jay-A'), stop: t('Stop soundboard'), quit: t('Quit') }))
     .catch((error) => console.warn('[tray]', error));
 }
 
