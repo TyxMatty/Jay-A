@@ -8,9 +8,16 @@
 //! icon, an .ico of the same picture. The taskbar only reads it again when the ID changes, and a
 //! clear and a set in the same instant don't count (measured), so each update clears the ID and
 //! sets it back a moment later.
+//!
+//! Where the .ico is matters: Explorer reads it by path. A process started from inside another
+//! app's MSIX package (a dev build started by a packaged desktop app, say) has its AppData writes
+//! redirected into that package's private copy, `%LOCALAPPDATA%\Packages\<package>\LocalCache\Local\…`,
+//! even without the package's identity (measured in Jay-E: the check for one said no). Explorer,
+//! outside, finds no file at the AppData path and shows a blank or old icon. So after writing, the
+//! .ico is looked for in those private copies, and the taskbar is given the real file (as in Jay-E).
 
 use std::hash::{Hash, Hasher};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tauri::Manager;
 use windows::core::PWSTR;
@@ -31,6 +38,15 @@ use windows::Win32::UI::WindowsAndMessaging::{
 /// installer), or Windows ties them again.
 const WINDOW_APP_ID: &str = "io.github.tyxmatty.jaya.window";
 
+/// Where Explorer can find a file this process wrote under `%LOCALAPPDATA%`: the same path, or
+/// a package's private copy of it when the write was redirected (see above).
+fn real_path(written: &Path) -> PathBuf {
+    let Some(local) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) else { return written.to_path_buf() };
+    let Ok(rest) = written.strip_prefix(&local) else { return written.to_path_buf() };
+    let Ok(packages) = std::fs::read_dir(local.join("Packages")) else { return written.to_path_buf() };
+    packages.flatten().map(|p| p.path().join("LocalCache").join("Local").join(rest)).find(|p| p.is_file()).unwrap_or_else(|| written.to_path_buf())
+}
+
 /// `rgba`: `size` x `size` pixels, 4 bytes each (straight alpha), as from a canvas.
 #[tauri::command]
 pub fn set_taskbar_icon(window: tauri::WebviewWindow, rgba: Vec<u8>, size: u32) -> Result<(), String> {
@@ -40,9 +56,8 @@ pub fn set_taskbar_icon(window: tauri::WebviewWindow, rgba: Vec<u8>, size: u32) 
     }
     let hwnd = HWND(window.hwnd().map_err(|e| e.to_string())?.0);
     // Named after its content, so a changed picture is never served from an icon cache. Dev builds
-    // get their own names: run from inside another app's MSIX package, their writes to AppData
-    // land in that package's private copy, Explorer finds no file and caches the failure by path
-    // (measured: a generic page icon until Explorer restarts), which must not hit the installed app.
+    // get their own names, so a path Explorer once failed to find (and cached as failed) before
+    // `real_path` existed never belongs to the installed app.
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     rgba.hash(&mut hasher);
     let dir = window.app_handle().path().app_local_data_dir().map_err(|e| e.to_string())?;
@@ -72,6 +87,7 @@ pub fn set_taskbar_icon(window: tauri::WebviewWindow, rgba: Vec<u8>, size: u32) 
         }
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let ico_path = real_path(&ico_path);
     relaunch_with_icon(hwnd, &exe, &ico_path).map_err(|e| format!("taskbar properties: {e}"))?;
     let raw = hwnd.0 as isize; // HWND isn't Send
     let main = window.clone();
@@ -155,7 +171,7 @@ fn ico(rgba: &[u8], size: u32) -> Vec<u8> {
 
 #[cfg(test)]
 mod tests {
-    use super::ico;
+    use super::{ico, real_path};
 
     #[test]
     fn ico_layout() {
@@ -171,5 +187,22 @@ mod tests {
         // Bottom-up BGRA: the bottom row (blue, transparent) comes first.
         assert_eq!(&file[62..70], &[255, 0, 0, 255, 0, 0, 0, 0]);
         assert_eq!(&file[70..78], &[0, 0, 255, 255, 0, 255, 0, 255]);
+    }
+
+    #[test]
+    fn a_redirected_file_is_found_in_its_package_copy() {
+        let local = std::path::PathBuf::from(std::env::var_os("LOCALAPPDATA").unwrap());
+        let package = local.join("Packages").join(format!("JayaTest_{}", std::process::id()));
+        let rest = format!("jaya-test-{}/icon.ico", std::process::id());
+        let copy = package.join("LocalCache").join("Local").join(&rest);
+        std::fs::create_dir_all(copy.parent().unwrap()).unwrap();
+        std::fs::write(&copy, b"x").unwrap();
+        let found = real_path(&local.join(&rest));
+        std::fs::remove_dir_all(&package).unwrap();
+        // Run inside a package's redirection, the test's own writes would be redirected too; the
+        // copy it made by hand is what a redirected write looks like from outside.
+        assert_eq!(found, copy);
+        // Nothing redirected: the path itself.
+        assert_eq!(real_path(&local.join("jaya-test-none/icon.ico")), local.join("jaya-test-none/icon.ico"));
     }
 }

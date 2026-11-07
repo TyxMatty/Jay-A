@@ -133,12 +133,14 @@ Jay-A/
    │  ├─ core/                   # i18n.js, style.js, appearance.js (do Jay-C); engine.js (invoke + Channel)
    │  ├─ ui/                     # dom.js, icons.js, tabs.js (do Jay-C); filters.js, soundboard.js,
    │  │                          # editor.js, converter.js, settings-modal.js
+   │  │                          # window-icon.js: o lobo no estilo (janela, barra de tarefas, bandeja)
    │  ├─ locales/pt-BR.js
    │  └─ store/settings.js       # só preferências da UI (tema, estilo, idioma)
    └─ src-tauri/
       ├─ tauri.conf.json         # productName "Jay-A", identifier io.github.tyxmatty.jaya
       ├─ icons/                  # cópia dos ícones do Jay-C
-      └─ src/main.rs             # comandos → jay-audio, bandeja, instância única, atalhos
+      └─ src/main.rs             # comandos → jay-audio, bandeja, instância única, atalhos;
+                                 # taskbar_icon.rs: o ícone da barra de tarefas (do Jay-C)
 ```
 
 Não há servidor: o Jay-A é só local.
@@ -165,6 +167,8 @@ flowchart LR
   TRAY["Ícone na bandeja"] -- "abrir" --> APP
   TRAY --> T1["parar soundboard, sair"]
 ```
+
+O ícone da janela, da barra de tarefas e da bandeja é o lobo do Jay nas cores do estilo (roxo no Calm, ciano no Neon, laranja no Soft), como no Jay-C: `ui/window-icon.js` o desenha e `taskbar_icon.rs` o põe na barra de tarefas, que lê um `.ico` gravado em `%LOCALAPPDATA%\io.github.tyxmatty.jaya`. Um processo aberto de dentro do pacote MSIX de outro app (um `npm run dev` iniciado por um app da Microsoft Store, por exemplo) tem essa gravação desviada para `%LOCALAPPDATA%\Packages\<pacote>\LocalCache\Local\…`, onde o Explorer não procura; por isso o `.ico` é procurado nessas cópias e a barra recebe o arquivo real (correção vinda do Jay-E). O `jay-a.exe` em si (no disco, no menu Iniciar) mantém o ícone do arquivo.
 
 ## 5. Filtros do microfone
 
