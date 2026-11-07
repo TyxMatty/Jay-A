@@ -86,11 +86,6 @@ impl MicState {
         let _ = engine.sync(chain);
         was
     }
-
-    /// Someone uses the mic now (the page's test or Jay-C): not a moment to restart Jay-A.
-    pub fn in_use(&self) -> bool {
-        self.lock().is_ok_and(|engine| engine.mic.is_some())
-    }
 }
 
 impl Engine {

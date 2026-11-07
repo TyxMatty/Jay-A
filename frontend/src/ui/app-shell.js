@@ -16,36 +16,6 @@ const LANGUAGES = [
   ['pt-BR', 'Português (Brasil)'],
 ];
 
-/** Where the auto-update stands (src-tauri/src/updater.rs); empty when it's off. */
-function updateText(update) {
-  switch (update?.state) {
-    case 'checking':
-      return t('Looking for updates…');
-    case 'latest':
-      return t('Jay-A is up to date.');
-    case 'downloading':
-      return t('Downloading Jay-A {version}…', { version: update.version });
-    case 'ready':
-      return t('Jay-A {version} installs as soon as the microphone is free: Jay-A closes for a few seconds and opens again.', { version: update.version });
-    case 'error':
-      return t("Couldn't look for updates: {error}", { error: update.error });
-    default:
-      return '';
-  }
-}
-
-function createUpdateLine() {
-  const line = h('p', { class: 'hint', 'aria-live': 'polite' });
-  if ('__TAURI_INTERNALS__' in window) {
-    Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event')]).then(([core, event]) => {
-      const show = (update) => (line.textContent = updateText(update));
-      event.listen('update-state', (e) => show(e.payload));
-      core.invoke('update_state').then(show);
-    });
-  }
-  return line;
-}
-
 function createThemeToggle() {
   const button = h('button', { type: 'button', class: 'icon-btn' });
   const render = () => {
@@ -140,7 +110,6 @@ function createSettingsPanel() {
         'div',
         { class: 'field' },
         h('p', { class: 'hint' }, t('Jay-A {version}', { version: __APP_VERSION__ })),
-        createUpdateLine(),
         h('p', { class: 'hint' }, t('Closing the window keeps Jay-A in the tray, next to the clock. To quit, right-click its icon there.')),
       ),
     ),

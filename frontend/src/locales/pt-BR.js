@@ -139,12 +139,6 @@ export default {
   "Jay-A reloads to change the language.": "O Jay-A recarrega pra trocar o idioma.",
   "About": "Sobre",
   "Jay-A {version}": "Jay-A {version}",
-  "Looking for updates…": "Procurando atualizações…",
-  "Jay-A is up to date.": "O Jay-A está atualizado.",
-  "Downloading Jay-A {version}…": "Baixando o Jay-A {version}…",
-  "Jay-A {version} installs as soon as the microphone is free: Jay-A closes for a few seconds and opens again.":
-    "O Jay-A {version} é instalado assim que o microfone estiver livre: o Jay-A fecha por alguns segundos e abre de novo.",
-  "Couldn't look for updates: {error}": "Não deu pra procurar atualizações: {error}",
   "Closing the window keeps Jay-A in the tray, next to the clock. To quit, right-click its icon there.":
     "Fechar a janela deixa o Jay-A na bandeja, perto do relógio. Pra sair, clique com o botão direito no ícone dele lá.",
   "Open Jay-A": "Abrir o Jay-A",

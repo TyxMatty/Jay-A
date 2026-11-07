@@ -41,7 +41,6 @@
     "targets": [
       "nsis"
     ],
-    "createUpdaterArtifacts": true,
     "publisher": "TyxMatty",
     "copyright": "© 2026 TyxMatty. MIT License.",
     "category": "Music",
@@ -56,17 +55,6 @@
     "windows": {
       "nsis": {
         "installMode": "currentUser"
-      }
-    }
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhERDBGRTIyQTY2NzcyMUEKUldRYWNtZW1JdjdRamV5SndodUF2WEF1NDlCQzZGRVcxRld0NEJoekgrclN1R3hQOWNGQ05URDMK",
-      "endpoints": [
-        "https://github.com/TyxMatty/Jay-A/releases/latest/download/latest.json"
-      ],
-      "windows": {
-        "installMode": "passive"
       }
     }
   }
