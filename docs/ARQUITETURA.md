@@ -661,7 +661,7 @@ Cada etapa termina com algo testável.
   - **Prévia:** começou a tocar em 44 ms.
 - **Não visto:** os diálogos de abrir e de salvar com o mouse, e o arquivo exportado pelo editor. A exportação usa o mesmo conversor, já testado.
 
-**Tour de boas-vindas (2026-11-07):** é o tour do Jay-C (modal, navegação, CSS e animações `wa-*`), com 7 passos do Jay-A e cenas próprias. Abre sozinho na primeira vez e depois por Configurações › Sobre › "Mostrar o tour". As animações seguem Configurações › Aparência › Animações, ligada por padrão, como no Jay-C, que não segue o "reduzir movimento" do Windows (neste PC, o Windows pede menos movimento).
+**Tour de boas-vindas (2026-11-07):** é o tour do Jay-C (modal, navegação, CSS e animações `wa-*`), com 7 passos do Jay-A e cenas próprias. Abre sozinho na primeira vez e depois por Configurações › Sobre › "Mostrar o tour". As animações seguem Configurações › Aparência › Animações, ligada por padrão, como no Jay-C, que não segue o "reduzir movimento" do Windows (neste PC, o Windows pede menos movimento). Como no Jay-C, o modal entra subindo e aparecendo e sai sumindo, e todas as cenas se mexem o tempo todo: medido no app, cada passo tem de 6 a 25 animações contínuas rodando, além das entradas que tocam uma vez.
 
 ## 13. Decisões em aberto
 

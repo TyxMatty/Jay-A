@@ -1197,6 +1197,62 @@ fieldset > h3 {
 :root[data-motion='full'] .welcome-art .wa-slide-x { animation: wa-slide-x 2.4s ease-in-out infinite alternate; }
 @keyframes wa-slide-x { from { translate: -18px 0; } to { translate: 18px 0; } }
 
+/* Jay-A's own scene motions (ui/welcome-art.js): every scene keeps moving, like Jay-C's. */
+.welcome-art .wa-glow { opacity: 0.35; } /* a still picture shows them half lit */
+:root[data-motion='full'] .welcome-art :is(.wa-level, .wa-glow, .wa-to-tray, .wa-walk-in) {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+:root[data-motion='full'] .welcome-art .wa-level { transform-origin: center; animation: wa-level 900ms ease-in-out var(--d, 0ms) infinite alternate; }
+:root[data-motion='full'] .welcome-art .wa-glow { animation: wa-glow 2.1s ease-in-out var(--d, 0ms) infinite; }
+:root[data-motion='full'] .welcome-art .wa-shake { animation: wa-shake 260ms steps(2) infinite; }
+:root[data-motion='full'] .welcome-art .wa-travel { animation: wa-travel 1.2s ease-in-out infinite; }
+:root[data-motion='full'] .welcome-art .wa-walk-in { animation: wa-walk 600ms ease-out var(--d, 0ms) both; }
+:root[data-motion='full'] .welcome-art .wa-to-tray { transform-origin: 110px 109px; transform-box: view-box; animation: wa-to-tray 3.2s ease-in-out infinite; }
+:root[data-motion='full'] .welcome-art .wa-pulse { animation-delay: var(--d, 0ms); }
+@keyframes wa-level { from { scale: 1 0.35; } to { scale: 1 1; } }
+@keyframes wa-glow { 0%, 60%, 100% { opacity: 0; } 20% { opacity: 1; } }
+@keyframes wa-shake { 50% { translate: 0 -3px; } }
+@keyframes wa-travel { from { translate: -24px 0; opacity: 0; } 20%, 80% { opacity: 1; } to { translate: 24px 0; opacity: 0; } }
+@keyframes wa-to-tray { 0%, 25% { translate: 0 0; scale: 1; opacity: 1; } 60% { translate: 60px 32px; scale: 0.1; opacity: 0; } 61%, 75% { translate: 0 0; scale: 0.9; opacity: 0; } 100% { translate: 0 0; scale: 1; opacity: 1; } }
+
+/* Dialogs (the tour): fade and rise in, fade out. From Jay-C. */
+:root[data-motion='full'] .modal {
+  transition:
+    opacity 180ms ease,
+    translate 180ms ease,
+    scale 180ms ease,
+    overlay 180ms allow-discrete,
+    display 180ms allow-discrete;
+}
+
+:root[data-motion='full'] .modal:not([open]) {
+  opacity: 0;
+  translate: 0 8px;
+  scale: 0.98;
+}
+
+@starting-style {
+  :root[data-motion='full'] .modal[open] {
+    opacity: 0;
+    translate: 0 8px;
+    scale: 0.98;
+  }
+}
+
+:root[data-motion='full'] .modal::backdrop {
+  transition:
+    opacity 180ms ease,
+    overlay 180ms allow-discrete,
+    display 180ms allow-discrete;
+}
+
+@starting-style {
+  :root[data-motion='full'] .modal[open]::backdrop {
+    opacity: 0;
+  }
+}
+
 /* Editor (ui/editor.js): the waveform spans both columns' width. */
 .editor-panel .editor-main {
   grid-column: 1 / -1;
