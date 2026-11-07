@@ -153,6 +153,7 @@ struct Server {
 
 impl Server {
     fn run(self, first: Pipe, mut on_event: impl FnMut(LinkEvent)) {
+        crate::audio_thread_priority(); // it writes each chunk as it comes
         let mut pipe = Some(first);
         while !self.stopped() {
             let Some(current) = pipe.as_mut() else {

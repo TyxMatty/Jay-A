@@ -194,6 +194,7 @@ fn run_mic(
     mut on_chunk: impl FnMut(&[f32; CHUNK_FRAMES], &Meters),
     on_error: impl Fn(String),
 ) {
+    crate::audio_thread_priority();
     if let Err(e) = initialize_mta().ok() {
         let _ = ready.send(Err(e.to_string()));
         return;

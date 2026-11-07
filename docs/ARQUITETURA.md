@@ -608,7 +608,14 @@ Cada etapa termina com algo testável.
   - **Fechar o Jay-A no meio da chamada** e o som de outros apps sem abafar: também na I5.
 - **Atalho conhecido:** um microfone que falha no meio da chamada (desconectado) só avisa a tela. O Jay-C nota a falta de `AUDIO` e fica na reserva até reconectar.
 
-**Ponto aberto do link (2026-11-06):** duas vezes, um Jay-A recém-instalado abriu o microfone e mandou o `state`, mas nenhum `AUDIO` chegou ao `jay_a_probe`. Depois, oito probes seguidos (no dev, e no instalado aberto pelo bash e pelo `Start-Process`) passaram, e não foi reproduzido. Pode ser o mesmo "Jay-A isn't responding" que o Jay-C mostrou com o Jay-A instalado. Como o app instalado não grava log, a causa não foi achada.
+**O "Jay-A não está respondendo" (2026-11-07), achado e corrigido:**
+- **Reproduzido** com o Jay-C e o Jay-A de dev. O link ficava de pé, mas o Jay-A escrevia o áudio com buracos de até 250 ms, e o seletor do Jay-C, que quer 1 s seguido sem intervalo acima de 60 ms, nunca passava para o Jay-A.
+- **A causa era a CPU da máquina em 100%** (testes de live do Jay-C rodando ao lado). As threads de áudio do Jay-A, em prioridade normal, perdiam a vez:
+  - nenhuma escrita no pipe passou de 15 ms, então o Jay-C lia na hora;
+  - os 250 primeiros blocos levaram 5,54 s em vez de 5,0 s;
+  - num teste isolado com a cadeia do usuário, os blocos chegaram até 83 ms um do outro, com e sem cancelamento de eco.
+- **Correção:** as threads do microfone, da referência de eco, do DeepFilterNet e do link se registram no MMCSS do Windows ("Pro Audio", `audio_thread_priority` no `lib.rs`). Com a CPU ainda em 100%, o máximo caiu para 22 ms (p99 de 21 ms), e o Jay-C mostrou "Jay-A ligado".
+- **Falta:** a chamada de verdade (a I5 do Jay-C).
 
 ## 13. Decisões em aberto
 

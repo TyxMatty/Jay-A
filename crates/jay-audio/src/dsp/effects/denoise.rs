@@ -87,6 +87,7 @@ impl Dfn {
         let thread = std::thread::Builder::new()
             .name("jay-audio-deepfilternet".into())
             .spawn(move || {
+                crate::audio_thread_priority(); // a late result is a frame without noise removal
                 let mut df = match DfTract::new(dfn_params(), &RuntimeParams::default_with_ch(1).with_atten_lim(limit)) {
                     Ok(df) => df,
                     Err(e) => return log::warn!("DeepFilterNet didn't start; the audio passes unfiltered: {e}"),

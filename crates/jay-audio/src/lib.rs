@@ -25,6 +25,20 @@ mod monitor;
 #[cfg(windows)]
 pub use mic::{Mic, MicDevice, MicOptions, list_mics};
 
+/// Schedules the calling thread as audio (Windows MMCSS, "Pro Audio"), ahead of ordinary work. With
+/// the CPU busy (a game, a video encode), a normal-priority thread missed its 20 ms: measured with
+/// the CPU at 100%, the mic's chunks came up to 83 ms apart, and Jay-C took that as a stalled Jay-A.
+pub fn audio_thread_priority() {
+    #[cfg(windows)]
+    {
+        let mut task = 0u32;
+        // The registration ends with the thread.
+        if let Err(e) = unsafe { windows::Win32::System::Threading::AvSetMmThreadCharacteristicsW(windows::core::w!("Pro Audio"), &mut task) } {
+            log::warn!("no audio priority for this thread: {e}");
+        }
+    }
+}
+
 /// RMS level of `samples` in dBFS; -inf for digital silence.
 pub fn level_db(samples: &[f32]) -> f32 {
     let sum: f32 = samples.iter().map(|s| s * s).sum();

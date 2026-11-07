@@ -88,6 +88,7 @@ impl EchoReference {
 }
 
 fn run(root: u32, played: &Mutex<VecDeque<f32>>, stop: &AtomicBool, ready: mpsc::Sender<Result<(), String>>) {
+    crate::audio_thread_priority();
     let opened = initialize_mta().ok().map_err(|e| e.to_string()).and_then(|()| {
         let format = WaveFormat::new(32, 32, &SampleType::Float, SAMPLE_RATE as usize, 1, None);
         let mut client = AudioClient::new_application_loopback_client(root, true).map_err(|e| format!("can't capture process {root}: {e}"))?;
