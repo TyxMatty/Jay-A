@@ -121,7 +121,7 @@ Jay-A/
 │     ├─ presets/                # os presets que vêm com o app (clean-voice, podcast, noise-only, radio)
 │     ├─ soundboard.rs           # 4: as vozes e a mistura (Mixer, Player)
 │     ├─ playback.rs             # 4: o soundboard nos fones, que também vai para a referência de eco
-│     ├─ files/                  # 4: decode.rs; depois encode.rs, convert.rs, edit.rs (lista de edições), peaks.rs
+│     ├─ files/                  # 4: decode.rs (por blocos, Opus via ogg); 5: convert.rs; depois edit.rs, peaks.rs
 │     └─ link.rs                 # 3 ✅: servidor do Jay Link (pipe, protocolo, segurança)
 ├─ scripts/                      # dev-debug.ps1 (app com depuração na porta 9224) e cdp-eval.mjs (roda JS no app), do Jay-C;
 │                                # make-speech.ps1 (fala com as vozes do Windows, para avaliar a remoção de ruído)
@@ -471,10 +471,11 @@ flowchart TD
 | Formato | Abrir | Salvar | Biblioteca |
 |---|---|---|---|
 | WAV | ✅ | ✅ (16/24 bits, 32 float) | symphonia / hound |
+| *(FLAC)* | | *16 bits* | *o `flacenc` monta o arquivo codificado na memória; o campo de tamanho mínimo de bloco do STREAMINFO é corrigido depois, porque ele conta o último bloco (mais curto) e os leitores recusam o arquivo* |
 | FLAC | ✅ | ✅ | symphonia / flacenc |
 | MP3 | ✅ | ✅ (CBR/VBR) | symphonia / mp3lame-encoder (LAME, LGPL: ok num app open-source, anotar na licença) |
 | OGG Vorbis | ✅ | ✅ | symphonia / vorbis_rs |
-| Opus (`.opus`) | ⚠️ symphonia não decodifica Opus até a 0.5 (verificar) → libopus | ✅ | opus + ogg |
+| Opus (`.opus`) | ✅ via `ogg` + libopus (o symphonia 0.5 não decodifica Opus) | ✅ | opus + ogg |
 | M4A / AAC | ✅ (AAC-LC) | ❌ fora do v1 | symphonia |
 | AIFF, ALAC | ✅ | ❌ | symphonia |
 
@@ -639,6 +640,15 @@ Cada etapa termina com algo testável.
 - **Não visto:** o eco com alto-falantes e o atalho com um jogo em foco (um jogo em tela cheia exclusiva pode segurar o teclado).
 
 **Microfone para outros apps (D4), medido (2026-11-07):** com o cabo apontado para o "Voicemeeter Input" e a sala quieta (gate fechado), o loopback desse dispositivo ficou em silêncio digital (−180 dBFS). Tocando o clipe de teste, o trecho mais alto foi a −27,1 dBFS: o microfone filtrado e o soundboard chegam ao cabo. O Voicemeeter estava fechado, então não foi visto o outro lado do cabo ("Voicemeeter Out B1") num app como o Discord. Não há VB-Cable neste PC.
+
+**Etapa 5, medido (2026-11-07):**
+- **S3 ✅:** os codificadores compilam com o MSVC (`mp3lame-sys`, o Vorbis aoTuV do `vorbis_rs` e o `opusic-sys` pelo cmake).
+- **Por blocos:** a conversão lê, ajusta os canais, reamostra (rubato, em fluxo, sem o atraso do início e com o comprimento certo no fim), normaliza (uma primeira passada acha o pico) e codifica sem guardar o arquivo inteiro. Ela escreve em `nome.ext.tmp` e só renomeia no fim; erro ou cancelar apagam o `.tmp`.
+- **`cargo test` do engine:** um WAV estéreo de 44,1 kHz com 1 kHz vira WAV 16/24/32, FLAC, MP3 192, OGG q0,5 e Opus 128. Lido de volta, o tom fica em 0,485–0,503 (era 0,5), e a duração em 1,000–1,019 s; o Opus sai a 48 kHz. Reamostrar para 48 kHz mono com normalização dá 48 000 quadros, com pico em −1 dBFS. Arquivo inválido e cancelar não deixam arquivo nenhum.
+- **`cargo test` do app, o "pronto quando" da etapa:** 10 arquivos mistos (WAV, MP3, OGG, Opus e FLAC, de 22,05 a 96 kHz, mono e estéreo) e um MP3 corrompido. Para cada um dos cinco formatos saem 10 convertidos e 1 erro, o do corrompido, com a duração de cada saída igual à da entrada (±0,08 s) e nenhum `.tmp` sobrando.
+- **Nomes de saída:** nunca o próprio arquivo de entrada. Se o nome já existe: substituir, manter os dois (`nome (1).ext`) ou pular, escolhido na tela.
+- **Arrastar e soltar:** no Windows, o Tauri toma o arrastar-e-soltar para si, e a página não recebe os arquivos. As abas Converter e Soundboard recebem os caminhos pelo evento do Tauri (`ui/file-drop.js`), e a Soundboard ganhou o import por caminho. "Escolher arquivos" e a pasta de saída usam os diálogos do Windows, chamados do Rust (`tauri-plugin-dialog`).
+- **Não visto no app:** a aba Converter com arquivos de verdade e o arrastar. O Jay-A de dev não conseguiu ficar aberto, porque o Jay-C de outra sessão reabria o Jay-A instalado em seguida.
 
 ## 13. Decisões em aberto
 

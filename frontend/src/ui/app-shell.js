@@ -5,6 +5,7 @@ import { icons } from './icons.js';
 import { createTabs } from './tabs.js';
 import { createFiltersPanel } from './filters.js';
 import { createSoundboardPanel } from './soundboard.js';
+import { createConvertPanel } from './convert.js';
 import { toggleTheme, currentTheme } from './theme.js';
 import { settings } from '../store/settings.js';
 import { resolveStyle } from '../core/style.js';
@@ -144,7 +145,7 @@ export function mountApp(root) {
     {
       key: 'convert',
       label: tabLabel(icons.convert, t('Convert')),
-      panel: placeholder(t('Convert'), t('Convert audio files between WAV, FLAC, MP3, OGG and Opus, in batches.'), 5),
+      panel: createConvertPanel(),
     },
     { key: 'settings', label: tabLabel(icons.settings, t('Settings')), panel: createSettingsPanel() },
   ];

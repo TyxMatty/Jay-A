@@ -7,6 +7,8 @@
 mod audio;
 #[cfg(windows)]
 mod soundboard;
+#[cfg(windows)]
+mod convert;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -49,6 +51,7 @@ fn main() {
             }
         }))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             set_tray_labels,
             #[cfg(windows)]
@@ -93,6 +96,16 @@ fn main() {
             soundboard::soundboard_state,
             #[cfg(windows)]
             soundboard::soundboard_import,
+            #[cfg(windows)]
+            soundboard::soundboard_import_path,
+            #[cfg(windows)]
+            convert::pick_audio_files,
+            #[cfg(windows)]
+            convert::pick_folder,
+            #[cfg(windows)]
+            convert::convert_start,
+            #[cfg(windows)]
+            convert::convert_cancel,
             #[cfg(windows)]
             soundboard::soundboard_update,
             #[cfg(windows)]
@@ -150,6 +163,7 @@ fn main() {
                 app.state::<audio::MicState>().resume(&app.state::<audio::ChainState>());
                 app.manage(soundboard::SoundboardState::load(config_dir, app.path().app_data_dir()?));
                 soundboard::register_hotkeys(app.handle());
+                app.manage(convert::ConvertState::default());
             }
             // The window starts hidden (tauri.conf.json), so --background never flashes it.
             if !background(&std::env::args().collect::<Vec<_>>()) {

@@ -182,12 +182,27 @@ pub fn soundboard_state(board: State<'_, SoundboardState>) -> Result<Value, Stri
 #[tauri::command(async)]
 pub fn soundboard_import(board: State<'_, SoundboardState>, request: Request<'_>) -> Result<Value, String> {
     let InvokeBody::Raw(bytes) = request.body() else { return Err("expected the file's bytes".into()) };
+    let name = request.headers().get("name").and_then(|v| v.to_str().ok()).unwrap_or("clip");
+    import(&board, &percent_decode(name), bytes)
+}
+
+/// A file dropped on the window (the drop gives paths, not bytes).
+#[tauri::command(async)]
+pub fn soundboard_import_path(board: State<'_, SoundboardState>, path: String) -> Result<Value, String> {
+    let path = std::path::Path::new(&path);
+    if fs::metadata(path).map_err(|e| e.to_string())?.len() > MAX_BYTES as u64 {
+        return Err("this file is too big".into());
+    }
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| "clip".into());
+    import(&board, &name, &fs::read(path).map_err(|e| e.to_string())?)
+}
+
+/// Checks the file by decoding it, then adds it to the library.
+fn import(board: &SoundboardState, name: &str, bytes: &[u8]) -> Result<Value, String> {
     if bytes.len() > MAX_BYTES {
         return Err("this file is too big".into());
     }
-    let name = request.headers().get("name").and_then(|v| v.to_str().ok()).unwrap_or("clip");
-    let name = percent_decode(name);
-    let (stem, ext) = name.rsplit_once('.').unwrap_or((&name, "audio"));
+    let (stem, ext) = name.rsplit_once('.').unwrap_or((name, "audio"));
     let ext: String = ext.chars().filter(char::is_ascii_alphanumeric).take(5).collect::<String>().to_lowercase();
     let mut locked = board.lock()?;
     let base = file_id(stem);

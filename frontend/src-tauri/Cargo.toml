@@ -17,6 +17,7 @@ serde_json = "1"
 jay-audio = { path = "../../crates/jay-audio" }
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
+tauri-plugin-dialog = "2"
 
 [profile.release]
 # Smaller, leaner binaries (same as Jay-C).

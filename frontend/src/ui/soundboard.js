@@ -4,6 +4,7 @@
 // (src-tauri/src/soundboard.rs); every command answers with the whole state, and the page redraws.
 import { h } from './dom.js';
 import { t } from '../core/i18n.js';
+import { onFileDrop } from './file-drop.js';
 
 const isTauri = '__TAURI_INTERNALS__' in window;
 const MIN_DB = -30;
@@ -109,14 +110,25 @@ export function createSoundboardPanel() {
     'div',
     {
       class: 'clip-drop',
-      onDragover: (e) => (e.preventDefault(), drop.classList.add('over')),
-      onDragleave: () => drop.classList.remove('over'),
-      onDrop: (e) => (e.preventDefault(), drop.classList.remove('over'), importFiles(e.dataTransfer.files)),
     },
     h('p', { class: 'hint' }, t('Drop audio files here (up to 20 s each), or')),
     h('button', { type: 'button', class: 'btn', onClick: () => fileInput.click() }, t('Import…')),
     fileInput,
   );
+
+  onFileDrop(panel, drop, async (paths) => {
+    for (const path of paths) {
+      const name = path.split(/[\\/]/).pop();
+      message.textContent = t('Importing "{name}"…', { name });
+      try {
+        state = await invoke('soundboard_import_path', { path });
+        message.textContent = t('Imported "{name}".', { name });
+      } catch (error) {
+        message.textContent = t("Couldn't import \"{name}\": {error}", { name, error });
+      }
+    }
+    render();
+  });
 
   const call = h('input', { type: 'checkbox', role: 'switch', onChange: (e) => apply(invoke('soundboard_settings', { patch: { call: e.target.checked } })) });
   const headphones = h('input', { type: 'checkbox', role: 'switch', onChange: (e) => apply(invoke('soundboard_settings', { patch: { headphones: e.target.checked } })) });

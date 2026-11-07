@@ -1,25 +1,99 @@
-//! Audio files to Jay-A's format: 48 kHz stereo f32, interleaved (docs/ARQUITETURA.md, section 7).
-//! symphonia (pure Rust) reads WAV, FLAC, MP3, OGG Vorbis, AAC/M4A and ALAC; rubato resamples.
-//! Files come from the user, so anything odd is an error, never a panic.
+//! Audio files to samples. `Reader` reads any file block by block (for conversion, where files can
+//! be hours long); `decode` reads a short one whole into Jay-A's format, 48 kHz stereo f32
+//! interleaved (the soundboard, docs/ARQUITETURA.md section 7).
+//!
+//! symphonia (pure Rust) reads WAV, FLAC, MP3, OGG Vorbis, AAC/M4A, AIFF and ALAC; Opus (which
+//! symphonia 0.5 doesn't decode) is read with `ogg` + libopus. Files come from the user, so
+//! anything odd is an error, never a panic.
 
 use std::fs::File;
+use std::io::BufReader;
 use std::path::Path;
 
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
 use symphonia::core::audio::SampleBuffer;
-use symphonia::core::codecs::{CODEC_TYPE_NULL, DecoderOptions};
+use symphonia::core::codecs::{CODEC_TYPE_NULL, Decoder, DecoderOptions};
 use symphonia::core::errors::Error;
-use symphonia::core::formats::FormatOptions;
+use symphonia::core::formats::{FormatOptions, FormatReader};
 use symphonia::core::io::MediaSourceStream;
 use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 
 use crate::SAMPLE_RATE;
 
-/// Decodes `path` to 48 kHz stereo (mono files are doubled, more channels keep the first two).
-/// Longer than `max_seconds` is an error, found while decoding, so a huge file isn't read whole.
-pub fn decode(path: &Path, max_seconds: f32) -> Result<Vec<f32>, String> {
+/// An audio file read block by block: interleaved f32 at the file's rate and channels.
+pub struct Reader {
+    pub rate: u32,
+    pub channels: usize,
+    /// Frames in the file, when its header says (for progress).
+    pub frames: Option<u64>,
+    inner: Inner,
+}
+
+enum Inner {
+    Symphonia { format: Box<dyn FormatReader>, decoder: Box<dyn Decoder>, track: u32 },
+    Opus { packets: ogg::PacketReader<BufReader<File>>, decoder: opus::Decoder, skip: usize, out: Vec<f32> },
+}
+
+impl Reader {
+    pub fn open(path: &Path) -> Result<Reader, String> {
+        let is_opus = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("opus"));
+        if is_opus { open_opus(path) } else { open_symphonia(path) }
+    }
+
+    /// The next block, or None at the end.
+    pub fn next_block(&mut self) -> Result<Option<Vec<f32>>, String> {
+        let channels = self.channels;
+        match &mut self.inner {
+            Inner::Symphonia { format, decoder, track } => loop {
+                let packet = match format.next_packet() {
+                    Ok(packet) => packet,
+                    Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(None),
+                    Err(Error::ResetRequired) => return Ok(None),
+                    Err(e) => return Err(e.to_string()),
+                };
+                if packet.track_id() != *track {
+                    continue;
+                }
+                let decoded = match decoder.decode(&packet) {
+                    Ok(decoded) => decoded,
+                    Err(Error::DecodeError(_)) => continue, // a damaged packet: skip it, like players do
+                    Err(e) => return Err(e.to_string()),
+                };
+                let spec = *decoded.spec();
+                if spec.channels.count() != channels {
+                    return Err("the number of channels changes inside the file".into());
+                }
+                let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
+                samples.copy_interleaved_ref(decoded);
+                return Ok(Some(clean(samples.samples().to_vec())));
+            },
+            Inner::Opus { packets, decoder, skip, out } => loop {
+                let Some(packet) = packets.read_packet().map_err(|e| e.to_string())? else { return Ok(None) };
+                let frames = match decoder.decode_float(&packet.data, out, false) {
+                    Ok(frames) => frames,
+                    Err(_) => continue, // a damaged packet
+                };
+                let dropped = (*skip).min(frames); // the encoder's warm-up (pre-skip)
+                *skip -= dropped;
+                if dropped < frames {
+                    return Ok(Some(clean(out[dropped * channels..frames * channels].to_vec())));
+                }
+            },
+        }
+    }
+}
+
+/// NaN, infinity and overs out: they would hurt the call's limiter, an encoder or the ears.
+fn clean(mut samples: Vec<f32>) -> Vec<f32> {
+    for s in &mut samples {
+        *s = if s.is_finite() { s.clamp(-1.0, 1.0) } else { 0.0 };
+    }
+    samples
+}
+
+fn open_symphonia(path: &Path) -> Result<Reader, String> {
     let file = File::open(path).map_err(|e| e.to_string())?;
     let stream = MediaSourceStream::new(Box::new(file), Default::default());
     let mut hint = Hint::new();
@@ -29,33 +103,47 @@ pub fn decode(path: &Path, max_seconds: f32) -> Result<Vec<f32>, String> {
     let probed = symphonia::default::get_probe()
         .format(&hint, stream, &FormatOptions::default(), &MetadataOptions::default())
         .map_err(|e| format!("not an audio file I can read ({e})"))?;
-    let mut format = probed.format;
+    let format = probed.format;
     let track = format.tracks().iter().find(|t| t.codec_params.codec != CODEC_TYPE_NULL).ok_or("no audio in this file")?;
-    let (track_id, rate) = (track.id, track.codec_params.sample_rate.ok_or("unknown sample rate")?);
-    let mut decoder = symphonia::default::get_codecs().make(&track.codec_params, &DecoderOptions::default()).map_err(|e| e.to_string())?;
-    let max_frames = (max_seconds * rate as f32) as usize;
+    let params = &track.codec_params;
+    let rate = params.sample_rate.filter(|&r| r > 0).ok_or("unknown sample rate")?;
+    let channels = params.channels.map(|c| c.count()).filter(|&c| c > 0).ok_or("unknown channels")?;
+    let decoder = symphonia::default::get_codecs().make(params, &DecoderOptions::default()).map_err(|e| e.to_string())?;
+    let (track, frames) = (track.id, params.n_frames);
+    Ok(Reader { rate, channels, frames, inner: Inner::Symphonia { format, decoder, track } })
+}
 
+/// Ogg Opus (RFC 7845): an OpusHead packet, an OpusTags packet, then audio, always at 48 kHz.
+fn open_opus(path: &Path) -> Result<Reader, String> {
+    let file = File::open(path).map_err(|e| e.to_string())?;
+    let mut packets = ogg::PacketReader::new(BufReader::new(file));
+    let head = packets.read_packet().map_err(|e| format!("not an Opus file ({e})"))?.ok_or("empty file")?.data;
+    if head.len() < 19 || &head[..8] != b"OpusHead" {
+        return Err("not an Opus file".into());
+    }
+    let channels = match head[9] {
+        1 => opus::Channels::Mono,
+        2 => opus::Channels::Stereo,
+        n => return Err(format!("Opus with {n} channels is not supported")),
+    };
+    let skip = u16::from_le_bytes([head[10], head[11]]) as usize;
+    packets.read_packet().map_err(|e| e.to_string())?.ok_or("no OpusTags")?;
+    let decoder = opus::Decoder::new(SAMPLE_RATE, channels).map_err(|e| e.to_string())?;
+    let n = head[9] as usize;
+    // Room for 120 ms, the longest Opus packet.
+    let out = vec![0.0; 5760 * n];
+    Ok(Reader { rate: SAMPLE_RATE, channels: n, frames: None, inner: Inner::Opus { packets, decoder, skip, out } })
+}
+
+/// Decodes `path` to 48 kHz stereo (mono files are doubled, more channels keep the first two).
+/// Longer than `max_seconds` is an error, found while decoding, so a huge file isn't read whole.
+pub fn decode(path: &Path, max_seconds: f32) -> Result<Vec<f32>, String> {
+    let mut reader = Reader::open(path)?;
+    let (rate, channels) = (reader.rate, reader.channels);
+    let max_frames = (max_seconds * rate as f32) as usize;
     let mut stereo: Vec<f32> = Vec::new();
-    loop {
-        let packet = match format.next_packet() {
-            Ok(packet) => packet,
-            Err(Error::IoError(e)) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-            Err(Error::ResetRequired) => break,
-            Err(e) => return Err(e.to_string()),
-        };
-        if packet.track_id() != track_id {
-            continue;
-        }
-        let decoded = match decoder.decode(&packet) {
-            Ok(decoded) => decoded,
-            Err(Error::DecodeError(_)) => continue, // a damaged packet: skip it, like players do
-            Err(e) => return Err(e.to_string()),
-        };
-        let spec = *decoded.spec();
-        let channels = spec.channels.count();
-        let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
-        samples.copy_interleaved_ref(decoded);
-        for frame in samples.samples().chunks_exact(channels) {
+    while let Some(block) = reader.next_block()? {
+        for frame in block.chunks_exact(channels) {
             stereo.extend_from_slice(&[frame[0], frame[if channels > 1 { 1 } else { 0 }]]);
         }
         if stereo.len() / 2 > max_frames {
@@ -65,12 +153,7 @@ pub fn decode(path: &Path, max_seconds: f32) -> Result<Vec<f32>, String> {
     if stereo.is_empty() {
         return Err("no audio in this file".into());
     }
-    let mut stereo = if rate == SAMPLE_RATE { stereo } else { resample(&stereo, rate)? };
-    // Anything else would hurt the call's limiter or the ears.
-    for s in &mut stereo {
-        *s = if s.is_finite() { s.clamp(-1.0, 1.0) } else { 0.0 };
-    }
-    Ok(stereo)
+    if rate == SAMPLE_RATE { Ok(stereo) } else { Ok(clean(resample(&stereo, rate)?)) }
 }
 
 fn resample(stereo: &[f32], rate: u32) -> Result<Vec<f32>, String> {
