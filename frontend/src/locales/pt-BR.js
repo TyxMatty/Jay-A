@@ -242,6 +242,12 @@ export default {
   "Jay-A reloads to change the language.": "O Jay-A recarrega pra trocar o idioma.",
   "About": "Sobre",
   "Show the tour": "Mostrar o tour",
+  "Microphone silent": "Microfone mudo",
+  "Jay-C: not connected": "Jay-C: desconectado",
+  "Jay-C: in a call": "Jay-C: numa chamada",
+  "Jay-C: using the microphone": "Jay-C: usando o microfone",
+  "Jay-C: linked": "Jay-C: ligado",
+  "No files yet.": "Nenhum arquivo ainda.",
   "Animations": "Animações",
   "The moving pictures of the tour and the slides between its steps.": "As figuras animadas do tour e o deslizar entre os passos.",
   // The welcome tour (core/welcome.js, ui/welcome-modal.js)

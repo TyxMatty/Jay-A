@@ -1,5 +1,6 @@
 // The window: top bar, then the sections (Filters, Soundboard, Editor, Convert, Settings) as tabs.
-// Sections not built yet are placeholders until their stage in docs/ARQUITETURA.md.
+// The look follows the Jay line (Jay-C): a status pill for the Jay-C link, icon chips on the cards.
+import { cardTitle } from './card-title.js';
 import { h } from './dom.js';
 import { icons } from './icons.js';
 import { createTabs } from './tabs.js';
@@ -20,6 +21,39 @@ const LANGUAGES = [
   ['en', 'English'],
   ['pt-BR', 'Português (Brasil)'],
 ];
+
+/**
+ * Jay-C's link, at a glance (like Jay-C's server pill): linked, using the microphone in a call, or
+ * not there; the silent-microphone warning wins. Opens Filters, where the details are.
+ */
+function createStatusPill(openFilters) {
+  const label = h('span', {});
+  const pill = h('button', { type: 'button', class: 'status-pill', 'aria-live': 'polite', onClick: () => openFilters() }, label);
+  let link = { connected: false };
+  let silent = false;
+  const render = () => {
+    const [state, text] = silent
+      ? ['offline', t('Microphone silent')]
+      : !link.connected
+        ? ['idle', t('Jay-C: not connected')]
+        : link.usingMic
+          ? ['online', link.inCall ? t('Jay-C: in a call') : t('Jay-C: using the microphone')]
+          : ['online', t('Jay-C: linked')];
+    pill.dataset.state = state;
+    label.textContent = text;
+  };
+  if ('__TAURI_INTERNALS__' in window) {
+    Promise.all([import('@tauri-apps/api/core'), import('@tauri-apps/api/event')]).then(([core, event]) => {
+      event.listen('link-state', (e) => ((link = e.payload), render()));
+      event.listen('mic-silent', (e) => ((silent = e.payload), render()));
+      core.invoke('link_state').then((l) => ((link = l), (silent = !!l.micSilent), render()));
+    });
+  } else {
+    pill.hidden = true;
+  }
+  render();
+  return pill;
+}
 
 function createThemeToggle() {
   const button = h('button', { type: 'button', class: 'icon-btn' });
@@ -97,7 +131,7 @@ function createSettingsPanel(openWelcome) {
     h(
       'fieldset',
       {},
-      h('h3', {}, t('Appearance')),
+      cardTitle(icons.palette, t('Appearance')),
       h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'style-label' }, t('Style')), styleGroup),
       h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, t('Theme')), themeGroup),
       h(
@@ -117,7 +151,7 @@ function createSettingsPanel(openWelcome) {
     h(
       'fieldset',
       {},
-      h('h3', {}, t('About')),
+      cardTitle(icons.info, t('About')),
       h(
         'div',
         { class: 'field' },
@@ -158,6 +192,7 @@ export function mountApp(root) {
     'header',
     { class: 'topbar' },
     h('div', { class: 'brand' }, h('span', { class: 'brand-mark wolf-mark', 'aria-hidden': 'true' }), h('span', { class: 'brand-name' }, 'Jay', h('span', {}, '-'), 'A')),
+    createStatusPill(() => tabs.select('filters')),
     createThemeToggle(),
   );
 
@@ -166,7 +201,7 @@ export function mountApp(root) {
     if (next.language !== prev.language) location.reload();
   });
 
-  root.replaceChildren(header, h('div', { class: 'app-body' }, tabs.list, h('div', { class: 'app-panels' }, items.map((i) => i.panel))), welcome.element);
+  root.replaceChildren(header, h('div', { class: 'app-body' }, tabs.list, h('div', { class: 'app-panels' }, items.map((i) => i.panel))), h('p', { class: 'app-version' }, `Jay-A ${__APP_VERSION__}`), welcome.element);
   tabs.select('filters');
   // The tour opens once by itself, marked seen as it opens (like Jay-C). Started with --background,
   // it waits in the hidden window until the user opens it.

@@ -1,6 +1,8 @@
 // Convert (stage 5, docs/ARQUITETURA.md section 9): files in (dropped or chosen in Windows'
 // dialog, as paths), the output's format and options, then the batch with each file's progress
 // and result. The engine converts (src-tauri/src/convert.rs); a bad file fails alone.
+import { cardTitle } from './card-title.js';
+import { icons } from './icons.js';
 import { h } from './dom.js';
 import { t } from '../core/i18n.js';
 import { onFileDrop } from './file-drop.js';
@@ -92,6 +94,10 @@ export function createConvertPanel() {
     startButton.disabled = !running && !files.length;
     clearButton.disabled = running || !files.length;
     folderLabel.textContent = folder ?? t('Next to each file');
+    if (!files.length) {
+      list.replaceChildren(h('li', { class: 'empty-state' }, h('span', { class: 'card-icon', html: icons.convert, 'aria-hidden': 'true' }), h('p', { class: 'hint' }, t('No files yet.'))));
+      return;
+    }
     list.replaceChildren(
       ...files.map((f) =>
         h(
@@ -148,11 +154,11 @@ export function createConvertPanel() {
   }
 
   panel.append(
-    h('fieldset', {}, h('h3', {}, t('Files')), drop, list, h('div', { class: 'row-between' }, clearButton, startButton), message),
+    h('fieldset', {}, cardTitle(icons.file, t('Files')), drop, list, h('div', { class: 'row-between' }, clearButton, startButton), message),
     h(
       'fieldset',
       {},
-      h('h3', {}, t('Output')),
+      cardTitle(icons.convert, t('Output')),
       field('convert-format', t('Format'), format),
       qualityField,
       field('convert-rate', t('Sample rate'), rate),

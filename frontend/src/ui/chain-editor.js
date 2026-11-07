@@ -2,6 +2,7 @@
 // each with on/off, its controls (built from the engine's ParamSpecs), meters, and presets.
 // The engine keeps and saves the chain (src-tauri/src/audio.rs); this page draws it and sends
 // the changes. Reordering works by dragging the grip or with the arrow buttons (keyboard).
+import { cardTitle } from './card-title.js';
 import { h } from './dom.js';
 import { icons } from './icons.js';
 import { t } from '../core/i18n.js';
@@ -485,7 +486,7 @@ export function createChainEditor({ invoke, webrtcFlags, applyWebrtc }) {
   const element = h(
     'fieldset',
     { class: 'chain-editor' },
-    h('h3', {}, t('Effect chain')),
+    cardTitle(icons.sliders, t('Effect chain')),
     h(
       'div',
       { class: 'field' },

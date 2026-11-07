@@ -2,6 +2,8 @@
 // on the waveform, or type start and end), the edits, undo, a preview in the headphones and the
 // export. The engine keeps the original untouched and the edits as a list (src-tauri/src/editor.rs);
 // every command answers with the new view, and the page redraws.
+import { cardTitle } from './card-title.js';
+import { icons } from './icons.js';
 import { h } from './dom.js';
 import { t } from '../core/i18n.js';
 import { onFileDrop } from './file-drop.js';
@@ -190,7 +192,7 @@ export function createEditorPanel() {
     h(
       'fieldset',
       { class: 'editor-main' },
-      h('h3', {}, t('Audio')),
+      cardTitle(icons.waveform, t('Audio')),
       drop,
       canvas,
       info,
@@ -204,7 +206,7 @@ export function createEditorPanel() {
       h('div', { class: 'button-row' }, h('div', { class: 'field' }, h('label', { for: 'editor-gain' }, t('Gain (dB)')), gainDb), gainButton, undoButton),
       message,
     ),
-    h('fieldset', {}, h('h3', {}, t('Export')), h('div', { class: 'field' }, h('label', { for: 'editor-format' }, t('Format')), format), exportButton),
+    h('fieldset', {}, cardTitle(icons.download, t('Export')), h('div', { class: 'field' }, h('label', { for: 'editor-format' }, t('Format')), format), exportButton),
   );
 
   addEventListener('resize', () => {

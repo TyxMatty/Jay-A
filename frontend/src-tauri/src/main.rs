@@ -13,6 +13,8 @@ mod convert;
 mod editor;
 #[cfg(windows)]
 mod cable_setup;
+#[cfg(windows)]
+mod taskbar_icon;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -110,6 +112,8 @@ fn main() {
             convert::convert_start,
             #[cfg(windows)]
             convert::convert_cancel,
+            #[cfg(windows)]
+            taskbar_icon::set_taskbar_icon,
             #[cfg(windows)]
             cable_setup::cable_install,
             #[cfg(windows)]

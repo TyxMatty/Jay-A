@@ -3,6 +3,8 @@
 // The engine (crates/jay-audio) runs the audio in Rust and keeps the mic's settings, since Jay-C
 // uses them with the window closed too; the page only gets the levels, about 20 times a second.
 // Changing a setting reopens a running mic with it; chain changes apply live.
+import { cardTitle } from './card-title.js';
+import { icons } from './icons.js';
 import { h } from './dom.js';
 import { settings } from '../store/settings.js';
 import { t } from '../core/i18n.js';
@@ -66,7 +68,7 @@ export function createFiltersPanel() {
     h(
       'fieldset',
       {},
-      h('h3', {}, t('Microphone')),
+      cardTitle(icons.mic, t('Microphone')),
       h('div', { class: 'field' }, h('label', { for: 'filters-mic' }, t('Microphone')), micSelect),
       silent,
       noise.row,

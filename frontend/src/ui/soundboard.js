@@ -2,6 +2,8 @@
 // files, play, volume, a global shortcut each, remove), where they play (Jay-C's call, the
 // headphones), the soundboard's volume and "stop all". The engine keeps the library
 // (src-tauri/src/soundboard.rs); every command answers with the whole state, and the page redraws.
+import { cardTitle } from './card-title.js';
+import { icons } from './icons.js';
 import { h } from './dom.js';
 import { t } from '../core/i18n.js';
 import { onFileDrop } from './file-drop.js';
@@ -168,7 +170,7 @@ export function createSoundboardPanel() {
   function render() {
     call.checked = state.call;
     headphones.checked = state.headphones;
-    grid.replaceChildren(...(state.clips.length ? state.clips.map(clipCard) : [h('p', { class: 'hint' }, t('No clips yet.'))]));
+    grid.replaceChildren(...(state.clips.length ? state.clips.map(clipCard) : [h('div', { class: 'empty-state' }, h('span', { class: 'card-icon', html: icons.pads, 'aria-hidden': 'true' }), h('p', { class: 'hint' }, t('No clips yet.')))]));
     const stopRefused = state.stopHotkey && state.refused.includes(state.stopHotkey);
     settingsBox.replaceChildren(
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('Soundboard volume')), volumeSlider(t('Soundboard volume'), state.volume, (volume) => apply(invoke('soundboard_settings', { patch: { volume } })))),
@@ -183,11 +185,11 @@ export function createSoundboardPanel() {
   }
 
   panel.append(
-    h('fieldset', {}, h('h3', {}, t('Clips')), drop, grid, message),
+    h('fieldset', {}, cardTitle(icons.pads, t('Clips')), drop, grid, message),
     h(
       'fieldset',
       {},
-      h('h3', {}, t('Where it plays')),
+      cardTitle(icons.headphones, t('Where it plays')),
       toggleRow(call, t('In the call'), t("In Jay-C's call and in the microphone for other apps (Filters). Muting in Jay-C mutes the clips there too.")),
       toggleRow(headphones, t('In my headphones'), t('On speakers, echo cancellation keeps the clip from reaching the call twice.')),
       settingsBox,

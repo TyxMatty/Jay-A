@@ -1,5 +1,6 @@
 import { settings } from '../store/settings.js';
 import { resolveStyle } from '../core/style.js';
+import { updateWindowIcon } from './window-icon.js';
 
 const darkQuery = matchMedia('(prefers-color-scheme: dark)');
 const isTauri = '__TAURI_INTERNALS__' in window;
@@ -29,11 +30,14 @@ export function initTheme() {
   document.documentElement.dataset.theme = ''; // force the first applyTheme() to sync the title bar
   applyTheme();
   applyStyle();
+  updateWindowIcon();
   settings.subscribe((next, prev) => {
     if (next.theme !== prev.theme) applyTheme();
     if (next.style !== prev.style) applyStyle();
+    // The window icon (title bar and taskbar) is the wolf in the style's colors, like Jay-C's.
+    if (next.style !== prev.style || next.theme !== prev.theme) updateWindowIcon();
   });
-  darkQuery.addEventListener('change', applyTheme);
+  darkQuery.addEventListener('change', () => (applyTheme(), updateWindowIcon()));
 }
 
 /** Header quick toggle: flips between explicit light and dark. */
