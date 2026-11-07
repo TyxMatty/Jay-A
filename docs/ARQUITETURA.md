@@ -633,9 +633,10 @@ Cada etapa termina com algo testável.
 - **No app de dev, pela depuração remota:**
   - **Import:** um WAV importado vira o clipe "Bipe de teste", copiado para `soundboard/` e salvo no `config.json` sem apagar a chave `mic`. Um texto com nome `.mp3` é recusado.
   - **Atalho e play:** o atalho Ctrl+Alt+F9 foi registrado. Tocar respondeu em 35 ms, e a aba mostra o card com tocar, nome, volume, atalho e remover.
-- **Não visto:**
-  - **O clipe chegando à chamada:** o microfone (ME6S) estava travado, e o probe não recebeu nenhum bloco.
-  - **O eco com alto-falantes** e **o atalho com um jogo em foco.**
+- **Na chamada, com o Jay-C de verdade** (0.4.1, numa chamada, com o cancelamento de eco ligado), depois de o microfone ser destravado:
+  - o Ctrl+Alt+F9 foi mandado pelo Windows (`SendKeys`), com o foco fora do Jay-A;
+  - o áudio que vai para o link passou de silêncio (gate fechado) para −21 dB por 1 s e voltou ao silêncio. É o esperado: o tom de teste a −15 dBFS, com o volume do clipe em −6 dB.
+- **Não visto:** o eco com alto-falantes e o atalho com um jogo em foco (um jogo em tela cheia exclusiva pode segurar o teclado).
 
 ## 13. Decisões em aberto
 
