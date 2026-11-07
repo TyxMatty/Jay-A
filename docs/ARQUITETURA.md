@@ -525,9 +525,9 @@ Cada etapa termina com algo testável.
 | 2c ✅ | Aba Filtros: a cadeia (adicionar, reordenar por arraste e por teclado, ligar/desligar), os parâmetros gerados do `ParamSpec`, os medidores por efeito, a latência total e os presets | pelo teclado, montar a cadeia do Voz limpa do zero; o que se ouve no "Ouvir meu microfone" muda na hora |
 | 2d ✅ | Remoção de ruído por IA (DeepFilterNet 3 e RNNoise), trazida da etapa 7 porque a supressão do WebRTC deixava passar teclado, cliques e vozes ao fundo (relato do usuário) (S5) | o efeito entra na cadeia como os outros; DeepFilterNet numa thread própria, sem alocar na thread de áudio; avaliação com fala medida (abaixo) |
 | 3 | Servidor do Jay Link (S1, S2), junto com a I5 do Jay-C | o `jay_a_probe` do Jay-C passa; numa chamada, o outro lado ouve a voz filtrada pelo Jay-A; fechar o Jay-A não corta a voz (a reserva assume); o som de outros apps continua sem abafar (−7,8 dB, spike 09 do Jay-C) |
-| 4 | Soundboard | um clipe tocado por atalho, com um jogo em foco, chega à chamada e aos fones sem voltar como eco |
-| 5 | Conversão (S3) | lote de 10 arquivos mistos para WAV, FLAC, MP3, OGG e Opus; um arquivo corrompido falha sozinho e os outros saem |
-| 6 | Editor | cortar, fade, normalizar e exportar; desfazer volta ao estado anterior; a prévia toca no monitor |
+| 4 ✅ | Soundboard | um clipe tocado por atalho, com um jogo em foco, chega à chamada e aos fones sem voltar como eco |
+| 5 ✅ | Conversão (S3) | lote de 10 arquivos mistos para WAV, FLAC, MP3, OGG e Opus; um arquivo corrompido falha sozinho e os outros saem |
+| 6 ✅ | Editor | cortar, fade, normalizar e exportar; desfazer volta ao estado anterior; a prévia toca no monitor |
 | 7 | Efeitos de voz (tom, robô, reverb) (S4) | cada efeito entra na cadeia como os da etapa 2; latência e CPU medidas |
 | 8 | Soundboard dentro do Jay-C | o botão na barra da chamada lista e toca os clipes do Jay-A |
 | 9 | Release: instalador NSIS do Jay-A em `%LOCALAPPDATA%\Jay-A`; o Jay-C oferece o Jay-A | os dois instalados numa máquina limpa fazem uma chamada filtrada; o Jay-C sozinho continua funcionando com o filtro dele |
@@ -650,6 +650,18 @@ Cada etapa termina com algo testável.
 - **Nomes de saída:** nunca o próprio arquivo de entrada. Se o nome já existe: substituir, manter os dois (`nome (1).ext`) ou pular, escolhido na tela.
 - **Arrastar e soltar:** no Windows, o Tauri toma o arrastar-e-soltar para si, e a página não recebe os arquivos. As abas Converter e Soundboard recebem os caminhos pelo evento do Tauri (`ui/file-drop.js`), e a Soundboard ganhou o import por caminho. "Escolher arquivos" e a pasta de saída usam os diálogos do Windows, chamados do Rust (`tauri-plugin-dialog`).
 - **Não visto no app:** a aba Converter com arquivos de verdade e o arrastar. O Jay-A de dev não conseguiu ficar aberto, porque o Jay-C de outra sessão reabria o Jay-A instalado em seguida.
+
+**Etapa 6, medido (2026-11-07):**
+- **Feito:** cortar (apagar a seleção ou manter só ela), fade de entrada e de saída (potência igual), ganho, normalizar (pico a −1 dBFS), inverter, tirar o silêncio das pontas, desfazer, prévia nos fones e exportar em qualquer formato da conversão. Exportar renderiza para um WAV temporário de 32 bits e passa pelo mesmo conversor da etapa 5.
+- **Ficaram para depois:** velocidade, loudness (LUFS) e aplicar um preset de filtros num arquivo.
+- **`cargo test`:** as posições valem para o áudio depois das edições anteriores. O desfazer volta exatamente ao estado anterior, e sem edições sai o original intacto. Posições fora do arquivo são limitadas, sem panic. Os fades começam e terminam em silêncio e sobem sem degrau; o inverter mantém os canais juntos; tirar o silêncio deixa só o som; os picos saem por coluna.
+- **No app de dev:**
+  - **Abrir:** um WAV de 2 s abriu ao ser "solto" (evento `tauri://drag-drop`).
+  - **Editar e desfazer:** apagar de 0,5 s a 1,0 s deixou 1,50 s, e o fade de saída apareceu na onda. Desfazer tirou o fade.
+  - **Prévia:** começou a tocar em 44 ms.
+- **Não visto:** os diálogos de abrir e de salvar com o mouse, e o arquivo exportado pelo editor. A exportação usa o mesmo conversor, já testado.
+
+**Tour de boas-vindas (2026-11-07):** é o tour do Jay-C (modal, navegação, CSS e animações `wa-*`), com 7 passos do Jay-A e cenas próprias. Abre sozinho na primeira vez e depois por Configurações › Sobre › "Mostrar o tour". As animações seguem Configurações › Aparência › Animações, ligada por padrão, como no Jay-C, que não segue o "reduzir movimento" do Windows (neste PC, o Windows pede menos movimento).
 
 ## 13. Decisões em aberto
 

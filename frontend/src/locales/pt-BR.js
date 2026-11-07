@@ -219,6 +219,8 @@ export default {
   "Jay-A reloads to change the language.": "O Jay-A recarrega pra trocar o idioma.",
   "About": "Sobre",
   "Show the tour": "Mostrar o tour",
+  "Animations": "Animações",
+  "The moving pictures of the tour and the slides between its steps.": "As figuras animadas do tour e o deslizar entre os passos.",
   // The welcome tour (core/welcome.js, ui/welcome-modal.js)
   "Step {n} of {total}": "Passo {n} de {total}",
   "Step {n}: {title}": "Passo {n}: {title}",

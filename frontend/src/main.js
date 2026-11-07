@@ -2,10 +2,14 @@ import { initTheme } from './ui/theme.js';
 import { mountApp } from './ui/app-shell.js';
 import { settings } from './store/settings.js';
 import { setLanguage, resolveLanguage, t } from './core/i18n.js';
+import { resolveMotion } from './core/motion.js';
 
 setLanguage(resolveLanguage(settings.get().language));
-// Animations (the tour's scenes, its slides) follow Windows' "Animation effects" setting.
-document.documentElement.dataset.motion = matchMedia('(prefers-reduced-motion: reduce)').matches ? 'reduced' : 'full';
+// Animations (the tour's scenes, its slides): Settings › Appearance › Animations, on by default,
+// like Jay-C (core/motion.js).
+const applyMotion = () => (document.documentElement.dataset.motion = resolveMotion(settings.get().motion));
+applyMotion();
+settings.subscribe(applyMotion);
 initTheme();
 mountApp(document.getElementById('app'));
 

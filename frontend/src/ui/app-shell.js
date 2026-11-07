@@ -83,6 +83,7 @@ function createSettingsPanel(openWelcome) {
     [['system', t('System')], ['light', t('Light')], ['dark', t('Dark')]],
     (input, value, label) => h('label', {}, input, label),
   );
+  const motion = h('input', { type: 'checkbox', role: 'switch', checked: settings.get().motion !== 'off', onChange: (e) => settings.update({ motion: e.target.checked ? 'on' : 'off' }) });
   const languageSelect = h(
     'select',
     { class: 'input', id: 'settings-language', 'aria-describedby': 'language-hint', onChange: (e) => settings.update({ language: e.target.value }) },
@@ -99,6 +100,12 @@ function createSettingsPanel(openWelcome) {
       h('h3', {}, t('Appearance')),
       h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'style-label' }, t('Style')), styleGroup),
       h('div', { class: 'field' }, h('span', { class: 'field-label', id: 'theme-label' }, t('Theme')), themeGroup),
+      h(
+        'label',
+        { class: 'toggle-row' },
+        motion,
+        h('span', { class: 'toggle-text' }, h('span', { class: 'toggle-title' }, t('Animations')), h('span', { class: 'hint' }, t('The moving pictures of the tour and the slides between its steps.'))),
+      ),
       h(
         'div',
         { class: 'field' },
