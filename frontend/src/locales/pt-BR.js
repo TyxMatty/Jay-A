@@ -136,7 +136,13 @@ export default {
   "Another app already uses {keys}.": "Outro app já usa {keys}.",
   "Where it plays": "Onde toca",
   "In the call": "Na chamada",
-  "While Jay-C uses this microphone. Muting in Jay-C mutes the clips too.": "Enquanto o Jay-C usa este microfone. Mutar no Jay-C muta os clipes também.",
+  "In Jay-C's call and in the microphone for other apps (Filters). Muting in Jay-C mutes the clips there too.":
+    "Na chamada do Jay-C e no microfone para outros apps (Filtros). Mutar no Jay-C muta os clipes lá também.",
+  "Microphone for other apps": "Microfone para outros apps",
+  "Sends the filtered microphone (and the soundboard) to a virtual cable. In Discord, OBS and others, pick the other end of the cable as the microphone: for \"CABLE Input\", choose \"CABLE Output\". No cable? VB-Cable is free at vb-audio.com.":
+    "Manda o microfone filtrado (e o soundboard) para um cabo virtual. No Discord, no OBS e em outros, escolha a outra ponta do cabo como microfone: para \"CABLE Input\", escolha \"CABLE Output\". Sem cabo? O VB-Cable é grátis em vb-audio.com.",
+  "The chosen cable isn't connected.": "O cabo escolhido não está conectado.",
+  "Couldn't open the cable: {error}": "Não deu pra abrir o cabo: {error}",
   "In my headphones": "Nos meus fones",
   "On speakers, echo cancellation keeps the clip from reaching the call twice.": "No alto-falante, o cancelamento de eco evita que o clipe chegue duas vezes na chamada.",
   "Soundboard volume": "Volume do soundboard",

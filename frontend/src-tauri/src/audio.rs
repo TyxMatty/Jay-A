@@ -20,6 +20,7 @@ use jay_audio::dsp::chain::{ChainControl, ChainSpec};
 use jay_audio::dsp::params::COMMON;
 use jay_audio::dsp::{Meters, effect, output_limiter, preset};
 use jay_audio::link::{LinkEvent, LinkServer, PIPE};
+use jay_audio::monitor::Monitor;
 use jay_audio::playback::echo_queue;
 use jay_audio::soundboard::{self, Player};
 use jay_audio::{Mic, MicDevice, MicOptions};
@@ -50,6 +51,10 @@ struct Engine {
     call: Option<Player>,
     /// What the soundboard plays in the headphones, for the echo canceller (soundboard.rs).
     board_echo: Arc<Mutex<VecDeque<f32>>>,
+    /// The virtual cable's input (an output endpoint id): the filtered mic for other apps, like a
+    /// microphone of Jay-A's own. While set, the mic stays open.
+    cable: Option<String>,
+    cable_out: Arc<Mutex<Option<Monitor>>>,
 }
 
 /// The Jay-C connected now.
@@ -65,12 +70,10 @@ impl MicState {
     pub fn load(config_dir: &Path) -> MicState {
         let config = config_dir.join("config.json");
         let saved = fs::read_to_string(&config).ok();
-        let options = saved
-            .as_deref()
-            .and_then(|text| serde_json::from_str::<Value>(text).ok())
-            .and_then(|v| serde_json::from_value(v["mic"].clone()).ok())
-            .unwrap_or_default();
-        let engine = Engine { options, fresh: saved.is_none(), board_echo: echo_queue(), ..Engine::default() };
+        let parsed = saved.as_deref().and_then(|text| serde_json::from_str::<Value>(text).ok()).unwrap_or_default();
+        let options = serde_json::from_value(parsed["mic"].clone()).unwrap_or_default();
+        let cable = parsed["cable"].as_str().map(str::to_string);
+        let engine = Engine { options, fresh: saved.is_none(), board_echo: echo_queue(), cable, ..Engine::default() };
         MicState { engine: Mutex::new(engine), config }
     }
 
@@ -95,11 +98,27 @@ impl MicState {
         was
     }
 
+    /// At start: opens the saved virtual cable (and so the mic). A missing cable is left saved, for
+    /// when it's back.
+    pub fn resume(&self, chain: &ChainState) {
+        let Ok(mut engine) = self.lock() else { return };
+        let Some(device) = engine.cable.clone() else { return };
+        match Monitor::start(Some(device)) {
+            Ok(out) => *engine.cable_out.lock().unwrap() = Some(out),
+            Err(e) => eprintln!("virtual cable: {e}"),
+        }
+        if let Err(e) = engine.sync(chain) {
+            eprintln!("microphone for the virtual cable: {e}");
+        }
+    }
+
     /// Where the soundboard's call voices go: the mic's mixer, only while Jay-C uses the mic (the
     /// page's test doesn't send them anywhere).
     pub fn call_player(&self) -> Option<Player> {
         let engine = self.lock().ok()?;
-        engine.jay_c.as_ref().filter(|j| j.wants_mic)?;
+        if engine.cable.is_none() {
+            engine.jay_c.as_ref().filter(|j| j.wants_mic)?;
+        }
         engine.call.clone()
     }
 
@@ -113,7 +132,7 @@ impl Engine {
     fn sync(&mut self, chain: &ChainState) -> Result<(), String> {
         let testing = self.page.lock().unwrap().is_some();
         let jay_c = self.jay_c.as_ref().filter(|j| j.wants_mic).map(|j| j.pid);
-        let wanted = (testing || jay_c.is_some()).then(|| (self.options.clone(), jay_c));
+        let wanted = (testing || jay_c.is_some() || self.cable.is_some()).then(|| (self.options.clone(), jay_c));
         if self.opened != wanted {
             self.mic = None;
             self.opened = None;
@@ -168,6 +187,7 @@ impl Engine {
             .map_err(|e| e.to_string())?;
 
         let link = self.link.as_ref().map(LinkServer::audio);
+        let cable = self.cable_out.clone();
         let page = self.page.clone();
         // shortcut: a mic that fails mid-call only tells the page; Jay-C notices the missing AUDIO
         // and stays on its reserve until it reconnects. Reopen here if that turns out to matter.
@@ -180,6 +200,12 @@ impl Engine {
             move |chunk, m| {
                 if let Some(link) = &link {
                     link.push(chunk); // dropped unless Jay-C asked for the mic
+                }
+                // Never wait: setting the cable up (opening a device) holds the lock a while.
+                if let Ok(cable) = cable.try_lock()
+                    && let Some(cable) = cable.as_ref()
+                {
+                    cable.push(chunk);
                 }
                 let _ = meters_tx.try_send(*m); // full: the page just misses one
             },
@@ -333,6 +359,29 @@ fn state(control: &ChainControl) -> Value {
 #[tauri::command]
 pub async fn list_mics() -> Result<Vec<MicDevice>, String> {
     jay_audio::list_mics()
+}
+
+/// Output devices, for the virtual cable picker.
+#[tauri::command]
+pub async fn list_outputs() -> Result<Vec<MicDevice>, String> {
+    jay_audio::list_outputs()
+}
+
+/// The virtual cable's input the filtered mic goes to (an output endpoint id), or null.
+#[tauri::command(async)]
+pub fn cable(mic: State<'_, MicState>) -> Result<Option<String>, String> {
+    Ok(mic.lock()?.cable.clone())
+}
+
+/// Sends the filtered mic to `device` (a virtual cable's input), or stops (null). Saved.
+#[tauri::command(async)]
+pub fn set_cable(mic: State<'_, MicState>, chain: State<'_, ChainState>, device: Option<String>) -> Result<(), String> {
+    let mut engine = mic.lock()?;
+    let out = device.clone().map(|id| Monitor::start(Some(id))).transpose()?;
+    *engine.cable_out.lock().unwrap() = out;
+    config_set(&mic.config, "cable", json!(device))?;
+    engine.cable = device;
+    engine.sync(&chain)
 }
 
 /// The mic's settings (config.json).

@@ -55,6 +55,9 @@ export function createFiltersPanel() {
   const testButton = h('button', { type: 'button', class: 'btn btn-secondary', onClick: () => (testing ? stop() : start()) });
   const message = h('p', { class: 'hint', 'aria-live': 'polite' });
   const linkStatus = h('p', { class: 'hint', 'aria-live': 'polite' }, linkText({ connected: false }));
+  // The filtered mic for other apps, through a virtual cable (like a microphone of Jay-A's own).
+  const cableSelect = h('select', { class: 'input', id: 'filters-cable', onChange: (e) => setCable(e.target.value || null) });
+  const cableMessage = h('p', { class: 'hint', 'aria-live': 'polite' });
 
   panel.append(
     h(
@@ -66,6 +69,14 @@ export function createFiltersPanel() {
       gain.row,
       h('div', { class: 'field' }, h('span', { class: 'field-label' }, t('Level')), meter, h('div', { class: 'row-between' }, status, testButton), message),
       monitor.row,
+      h(
+        'div',
+        { class: 'field' },
+        h('label', { for: 'filters-cable' }, t('Microphone for other apps')),
+        cableSelect,
+        h('p', { class: 'hint' }, t('Sends the filtered microphone (and the soundboard) to a virtual cable. In Discord, OBS and others, pick the other end of the cable as the microphone: for "CABLE Input", choose "CABLE Output". No cable? VB-Cable is free at vb-audio.com.')),
+        cableMessage,
+      ),
       linkStatus,
     ),
   );
@@ -95,6 +106,24 @@ export function createFiltersPanel() {
       ...mics.map((m) => h('option', { value: m.id, selected: m.id === options.device }, m.name)),
     );
   };
+
+  /** Outputs that look like a virtual cable's input come first. */
+  const isCable = (name) => /cable|vb-audio|voicemeeter|virtual/i.test(name);
+  async function listCables() {
+    const [outputs, current] = await Promise.all([invoke('list_outputs').catch(() => []), invoke('cable').catch(() => null)]);
+    outputs.sort((a, b) => isCable(b.name) - isCable(a.name));
+    cableSelect.replaceChildren(h('option', { value: '' }, t('Off')), ...outputs.map((o) => h('option', { value: o.id, selected: o.id === current }, o.name)));
+    if (current && !outputs.some((o) => o.id === current)) cableMessage.textContent = t("The chosen cable isn't connected.");
+  }
+  async function setCable(device) {
+    cableMessage.textContent = '';
+    try {
+      await invoke('set_cable', { device });
+    } catch (error) {
+      cableMessage.textContent = t("Couldn't open the cable: {error}", { error });
+      listCables();
+    }
+  }
 
   async function setOptions(patch) {
     options = { ...options, ...patch };
@@ -172,6 +201,7 @@ export function createFiltersPanel() {
     });
     event.listen('link-state', (e) => (linkStatus.textContent = linkText(e.payload)));
     invoke('link_state').then((link) => (linkStatus.textContent = linkText(link)));
+    listCables();
     [options, mics] = await Promise.all([invoke('mic_options'), invoke('list_mics').catch(() => [])]);
     renderOptions();
   });

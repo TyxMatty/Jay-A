@@ -14,9 +14,7 @@ if ('__TAURI_INTERNALS__' in window) {
     .catch((error) => console.warn('[tray]', error));
 }
 
-// No browser menu (Back, Reload, Print, Inspect…) outside text fields. Dev builds keep it, for Inspect.
-if (!import.meta.env.DEV) {
-  document.addEventListener('contextmenu', (e) => {
-    if (!e.target.closest?.('input, textarea, [contenteditable="true"]')) e.preventDefault();
-  });
-}
+// No browser menu (Back, Reload, Print, Inspect…) outside text fields, which keep copy/paste.
+document.addEventListener('contextmenu', (e) => {
+  if (!e.target.closest?.('input, textarea, [contenteditable="true"]')) e.preventDefault();
+});

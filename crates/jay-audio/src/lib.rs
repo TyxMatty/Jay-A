@@ -22,12 +22,12 @@ pub mod link;
 #[cfg(windows)]
 mod mic;
 #[cfg(windows)]
-mod monitor;
+pub mod monitor;
 #[cfg(windows)]
 pub mod playback;
 
 #[cfg(windows)]
-pub use mic::{Mic, MicDevice, MicOptions, list_mics};
+pub use mic::{Mic, MicDevice, MicOptions, list_mics, list_outputs};
 
 /// Schedules the calling thread as audio (Windows MMCSS, "Pro Audio"), ahead of ordinary work. With
 /// the CPU busy (a game, a video encode), a normal-priority thread missed its 20 ms: measured with

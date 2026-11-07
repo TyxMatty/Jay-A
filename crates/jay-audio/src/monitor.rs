@@ -1,5 +1,6 @@
 //! "Hear my microphone": the cleaned mic on the default output device (WASAPI render, shared mode).
 //! Meant for headphones: on speakers the mic picks itself up again (feedback); the UI says so.
+//! The same, on a virtual cable's input, is the filtered mic for other apps (Discord, OBS...).
 
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -36,7 +37,8 @@ impl Drop for Monitor {
 }
 
 impl Monitor {
-    pub fn start() -> Result<Monitor, String> {
+    /// `device`: an output's endpoint id (`list_outputs`); none = the Windows default.
+    pub fn start(device: Option<String>) -> Result<Monitor, String> {
         // Room for the most it ever holds, so pushing from the audio thread never allocates.
         let queue: Queue = Arc::new(Mutex::new(VecDeque::with_capacity(MAX_QUEUED + CHUNK_FRAMES)));
         let stop = Arc::new(AtomicBool::new(false));
@@ -45,7 +47,7 @@ impl Monitor {
             .name("jay-audio-monitor".into())
             .spawn({
                 let (queue, stop) = (queue.clone(), stop.clone());
-                move || run_monitor(&queue, &stop, ready_tx)
+                move || run_monitor(device.as_deref(), &queue, &stop, ready_tx)
             })
             .map_err(|e| e.to_string())?;
         match ready_rx.recv() {
@@ -67,12 +69,15 @@ impl Monitor {
     }
 }
 
-fn run_monitor(queue: &Mutex<VecDeque<f32>>, stop: &AtomicBool, ready: mpsc::Sender<Result<(), String>>) {
+fn run_monitor(device: Option<&str>, queue: &Mutex<VecDeque<f32>>, stop: &AtomicBool, ready: mpsc::Sender<Result<(), String>>) {
+    crate::audio_thread_priority();
     let opened = (|| {
         initialize_mta().ok().map_err(|e| e.to_string())?;
-        let device = DeviceEnumerator::new()
-            .and_then(|e| e.get_default_device(&Direction::Render))
-            .map_err(|e| format!("no output device: {e}"))?;
+        let enumerator = DeviceEnumerator::new().map_err(|e| format!("no output device: {e}"))?;
+        let device = match device {
+            Some(id) => enumerator.get_device(id).map_err(|e| format!("output device unavailable: {e}"))?,
+            None => enumerator.get_default_device(&Direction::Render).map_err(|e| format!("no output device: {e}"))?,
+        };
         let mut client = device.get_iaudioclient().map_err(|e| e.to_string())?;
         let format = WaveFormat::new(32, 32, &SampleType::Float, SAMPLE_RATE as usize, 1, None);
         client
@@ -184,7 +189,7 @@ mod tests {
     #[ignore = "plays a quiet 440 Hz tone on the default output for ~2 s: cargo test -- --ignored"]
     fn monitor_plays_what_it_is_given() {
         let silence = output_level(Duration::from_millis(600), || {});
-        let monitor = Monitor::start().expect("monitor");
+        let monitor = Monitor::start(None).expect("monitor");
         let mut phase = 0usize;
         let tone = output_level(Duration::from_millis(2000), || {
             let chunk: Vec<f32> = (phase..phase + CHUNK_FRAMES)

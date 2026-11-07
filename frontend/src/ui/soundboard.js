@@ -176,7 +176,7 @@ export function createSoundboardPanel() {
       'fieldset',
       {},
       h('h3', {}, t('Where it plays')),
-      toggleRow(call, t('In the call'), t('While Jay-C uses this microphone. Muting in Jay-C mutes the clips too.')),
+      toggleRow(call, t('In the call'), t("In Jay-C's call and in the microphone for other apps (Filters). Muting in Jay-C mutes the clips there too.")),
       toggleRow(headphones, t('In my headphones'), t('On speakers, echo cancellation keeps the clip from reaching the call twice.')),
       settingsBox,
     ),

@@ -133,7 +133,7 @@ impl Mic {
         if !on {
             monitor.take();
         } else if monitor.is_none() {
-            *monitor = Some(Monitor::start()?);
+            *monitor = Some(Monitor::start(None)?);
         }
         Ok(())
     }
@@ -141,10 +141,19 @@ impl Mic {
 
 /// Active capture devices, for the microphone picker. Call from a thread that may init COM.
 pub fn list_mics() -> Result<Vec<MicDevice>, String> {
+    list_devices(&Direction::Capture)
+}
+
+/// Active output devices, for the virtual cable picker (a cable's input is an output).
+pub fn list_outputs() -> Result<Vec<MicDevice>, String> {
+    list_devices(&Direction::Render)
+}
+
+fn list_devices(direction: &Direction) -> Result<Vec<MicDevice>, String> {
     initialize_mta().ok().map_err(|e| e.to_string())?;
     let enumerator = DeviceEnumerator::new().map_err(|e| e.to_string())?;
-    let default_id = enumerator.get_default_device(&Direction::Capture).and_then(|d| d.get_id()).ok();
-    let collection = enumerator.get_device_collection(&Direction::Capture).map_err(|e| e.to_string())?;
+    let default_id = enumerator.get_default_device(direction).and_then(|d| d.get_id()).ok();
+    let collection = enumerator.get_device_collection(direction).map_err(|e| e.to_string())?;
     let mut mics = Vec::new();
     for device in &collection {
         let Ok(device) = device else { continue };

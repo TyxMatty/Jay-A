@@ -582,8 +582,23 @@ fieldset > h3 {
   margin: 0 0 8px;
 }
 
-.app-panel fieldset {
-  max-width: 560px;
+/* The cards side by side in a wide window (Microphone | Effect chain), one column in a narrow one;
+   centered either way. */
+.app-panel {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 480px), 1fr));
+  gap: 0 16px;
+  align-items: start;
+  max-width: 1240px;
+  margin-inline: auto;
+}
+
+.app-panel[hidden] {
+  display: none;
+}
+
+.app-panel > h1 {
+  grid-column: 1 / -1;
 }
 
 
@@ -678,7 +693,7 @@ fieldset > h3 {
 /* ---------- Filters › Effect chain (ui/chain-editor.js) ---------- */
 
 .chain-editor {
-  max-width: 720px;
+  min-width: 0;
 }
 
 .button-row {

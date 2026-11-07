@@ -638,6 +638,8 @@ Cada etapa termina com algo testável.
   - o áudio que vai para o link passou de silêncio (gate fechado) para −21 dB por 1 s e voltou ao silêncio. É o esperado: o tom de teste a −15 dBFS, com o volume do clipe em −6 dB.
 - **Não visto:** o eco com alto-falantes e o atalho com um jogo em foco (um jogo em tela cheia exclusiva pode segurar o teclado).
 
+**Microfone para outros apps (D4), medido (2026-11-07):** com o cabo apontado para o "Voicemeeter Input" e a sala quieta (gate fechado), o loopback desse dispositivo ficou em silêncio digital (−180 dBFS). Tocando o clipe de teste, o trecho mais alto foi a −27,1 dBFS: o microfone filtrado e o soundboard chegam ao cabo. O Voicemeeter estava fechado, então não foi visto o outro lado do cabo ("Voicemeeter Out B1") num app como o Discord. Não há VB-Cable neste PC.
+
 ## 13. Decisões em aberto
 
 | # | Pergunta | Opções (recomendada primeiro) |
@@ -645,7 +647,7 @@ Cada etapa termina com algo testável.
 | D1 ✅ | O que o Jay-C faz **sem** o Jay-A instalado? | **Decidido: (b).** O Jay-C mantém o filtro próprio para sempre, como opção e como reserva quente. Pedido do usuário no chat do Jay-C: "fallback caso caia e opção para escolher entre o Jay-A ou o Jay-C nativo". |
 | D2 | Soundboard com o microfone mutado no Jay-C | **(a)** mutar silencia tudo: o soundboard vai junto com o microfone, sem mudar servidor nem protocolo · (b) faixa própria `soundboard` no SFU (muda o servidor, a sinalização e a UI de quem recebe) |
 | D3 | "Modificação de áudio" | assumido: editor de arquivos (etapa 6) **e** efeitos de voz ao vivo (etapa 7). Confirmar se os dois são desejados |
-| D4 | Microfone virtual para outros apps (Discord, OBS) | fora do escopo: exige um driver de áudio assinado. Alternativa sem driver: o usuário instala o VB-Cable e o Jay-A toca nele |
+| D4 ✅ | Microfone virtual para outros apps (Discord, OBS), como o do Voicemod | **Decidido: cabo virtual pronto** (pedido do usuário, 2026-11-07). Um driver próprio exigiria certificado EV pago e a assinatura da Microsoft. O Jay-A manda o microfone filtrado (e o soundboard) para a entrada de um cabo virtual já instalado (VB-Cable, Voicemeeter), e os outros apps escolhem a saída do cabo como microfone. Fica em Filtros › "Microfone para outros apps", salvo como `cable` no `config.json`. Enquanto o cabo está ligado, o microfone fica aberto. A compatibilidade com o Jay-C não muda. |
 | D5 | Versão em inglês desta documentação | depois, como o `ARQUITETURA.en.md` do Jay-C |
 | D6 ✅ | Licença do Jay-A | **Decidido: MIT**, como o Jay-C (pedido do usuário). O EasyEffects e o Carla servem de estudo, mas o código deles não entra (RNF-10). |
 | D7 | Plugins de terceiros (VST3/CLAP) na cadeia de filtros, como o Carla faz | fora do v1. Se entrar, segue o modelo do Carla: cada plugin num processo à parte, áudio por memória compartilhada, timeout por bloco (um plugin travado vira silêncio no lugar dele, não derruba a chamada) e versão de protocolo. Reavaliar depois da etapa 7 |

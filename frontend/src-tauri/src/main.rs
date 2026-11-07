@@ -58,6 +58,12 @@ fn main() {
             #[cfg(windows)]
             audio::set_mic_options,
             #[cfg(windows)]
+            audio::list_outputs,
+            #[cfg(windows)]
+            audio::cable,
+            #[cfg(windows)]
+            audio::set_cable,
+            #[cfg(windows)]
             audio::start_mic,
             #[cfg(windows)]
             audio::stop_mic,
@@ -141,6 +147,7 @@ fn main() {
                 app.manage(audio::MicState::load(&config_dir));
                 app.manage(audio::ChainState::load(&config_dir));
                 audio::start_link(app.handle());
+                app.state::<audio::MicState>().resume(&app.state::<audio::ChainState>());
                 app.manage(soundboard::SoundboardState::load(config_dir, app.path().app_data_dir()?));
                 soundboard::register_hotkeys(app.handle());
             }
