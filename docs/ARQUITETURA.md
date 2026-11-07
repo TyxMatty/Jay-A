@@ -612,7 +612,7 @@ Cada etapa termina com algo testável.
 - **Teste local de ponta a ponta,** com builds de debug assinadas: a 0.1.1 instalada e a 0.1.2 servida por um servidor local (`JAYA_UPDATE_URL`, só nas builds de debug), que demorava 5 s para responder o `latest.json`. Nesse tempo, o `jay_a_probe` abriu o microfone.
   - A 0.1.1 baixou a 0.1.2 logo no começo e esperou o probe terminar (22:25:58) para instalar.
   - A 0.1.2 estava rodando às 22:26:14, com `--background`, e o registro do Windows mostrava 0.1.2.
-- **A chave privada** fica fora do repositório (`%USERPROFILE%\.tauri\jay-a.key`); o CI a lê dos secrets do GitHub, que o usuário cadastra. Sem ela, o `npm run build` falha, porque o build assina o instalador.
+- **A chave privada** fica fora do repositório (`%USERPROFILE%\.tauri\jay-a.key`) e nos secrets do GitHub. Sem ela, o `npm run build` falha, porque o build assina o instalador.
 - **Ponto aberto, achado no mesmo teste:** duas vezes, o Jay-A recém-instalado abriu o microfone e mandou o `state`, mas nenhum `AUDIO` chegou ao probe. Nas duas, o updater estava ativo. Depois, oito probes seguidos (dev, instalado aberto pelo bash e pelo `Start-Process`) passaram, e não foi reproduzido. Pode ser o mesmo "Jay-A isn't responding" que o Jay-C mostrou com o Jay-A instalado. Sem log no app instalado, a causa não foi achada.
 
 ## 13. Decisões em aberto
