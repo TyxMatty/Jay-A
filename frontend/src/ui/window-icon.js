@@ -1,4 +1,4 @@
-// The window's icon (title bar and taskbar): the Jay wolf in the style's colors, drawn from two
+// The window's icon (title bar, taskbar and tray): the Jay wolf in the style's colors, drawn from two
 // masks (assets/brand, made by scripts/wolf-icon.ps1): the lines, and the inside of the head.
 // Always the style's dark-theme colors (the colors of the wolf drawings), so it reads on light and
 // dark taskbars. The .exe's own icon (on disk, in the Start menu, when pinned) is the file one.

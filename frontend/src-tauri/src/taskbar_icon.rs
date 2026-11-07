@@ -1,4 +1,4 @@
-//! The taskbar icon, drawn by the page in the current style (frontend/src/ui/window-icon.js).
+//! The taskbar and tray icons, drawn by the page in the current style (frontend/src/ui/window-icon.js).
 //! Copied from Jay-C (src-tauri/src/taskbar_icon.rs), without its PiP window grouping.
 //!
 //! `ICON_BIG` alone isn't enough once the app is installed: Windows ties `jay-a.exe` to its Start
@@ -51,6 +51,10 @@ pub fn set_taskbar_icon(window: tauri::WebviewWindow, rgba: Vec<u8>, size: u32) 
     if !ico_path.exists() {
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         std::fs::write(&ico_path, ico(&rgba, size)).map_err(|e| e.to_string())?;
+    }
+    // The tray icon, next to the clock, follows the style too (Jay-C has no tray; Jay-A lives there).
+    if let Some(tray) = window.app_handle().tray_by_id("main") {
+        let _ = tray.set_icon(Some(tauri::image::Image::new_owned(rgba.clone(), size, size)));
     }
     // CreateIcon takes BGRA color bits and an AND mask (here one byte per pixel: the inverted alpha).
     let mut bgra = rgba;

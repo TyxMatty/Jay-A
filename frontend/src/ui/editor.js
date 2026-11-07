@@ -45,6 +45,8 @@ export function createEditorPanel() {
   const seconds = (frames) => (view ? frames / view.rate : 0);
 
   async function open(path) {
+    // Shown first, so columns() measures the real width.
+    editing.hidden = false;
     message.textContent = t('Opening…');
     try {
       view = await invoke('editor_open', { path, columns: columns() });
@@ -167,6 +169,8 @@ export function createEditorPanel() {
 
   function render() {
     const has = !!view;
+    // Without a file, only the drop zone and the hint: no empty waveform, no greyed-out tools.
+    editing.hidden = !has;
     for (const b of [...tools, gainButton, exportButton]) b.disabled = !has || (b.dataset.selection === '1' && !selection);
     undoButton.disabled = !has || !view.edits;
     if (has) {
@@ -188,22 +192,28 @@ export function createEditorPanel() {
   );
   onFileDrop(panel, drop, (paths) => open(paths[0]));
 
+  const editing = h(
+    'div',
+    { class: 'editor-editing' },
+    canvas,
+    h(
+      'div',
+      { class: 'editor-range' },
+      h('div', { class: 'field' }, h('label', { for: 'editor-start' }, t('Start (s)')), start),
+      h('div', { class: 'field' }, h('label', { for: 'editor-end' }, t('End (s)')), end),
+    ),
+    h('div', { class: 'button-row' }, ...tools),
+    h('div', { class: 'button-row' }, h('div', { class: 'field' }, h('label', { for: 'editor-gain' }, t('Gain (dB)')), gainDb), gainButton, undoButton),
+  );
+
   panel.append(
     h(
       'fieldset',
       { class: 'editor-main' },
       cardTitle(icons.waveform, t('Audio')),
       drop,
-      canvas,
       info,
-      h(
-        'div',
-        { class: 'editor-range' },
-        h('div', { class: 'field' }, h('label', { for: 'editor-start' }, t('Start (s)')), start),
-        h('div', { class: 'field' }, h('label', { for: 'editor-end' }, t('End (s)')), end),
-      ),
-      h('div', { class: 'button-row' }, ...tools),
-      h('div', { class: 'button-row' }, h('div', { class: 'field' }, h('label', { for: 'editor-gain' }, t('Gain (dB)')), gainDb), gainButton, undoButton),
+      editing,
       message,
     ),
     h('fieldset', {}, cardTitle(icons.download, t('Export')), h('div', { class: 'field' }, h('label', { for: 'editor-format' }, t('Format')), format), exportButton),
