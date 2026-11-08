@@ -1,5 +1,7 @@
 # Jay-A — Estudo do EasyEffects e do Carla
 
+**Português** · [English](REFERENCIAS.en.md)
+
 Notas da leitura do código de dois projetos open-source de áudio, feita a pedido do usuário antes de escrever os filtros do Jay-A. Os dois são GPL e o Jay-A é **MIT** (decisão D6): daqui saem ideias, organização e faixas de parâmetros, **nunca código**. Os caminhos citados são dos repositórios deles.
 
 Lido em 2026-11-06: EasyEffects `011bdc5` (2026-11-05), Carla `97a9e07` (2026-03-19).

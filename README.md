@@ -36,8 +36,8 @@ Install and update Jay-A from **[Jay-H](https://github.com/TyxMatty/Jay-H)**, th
 |---|---|
 | [`crates/jay-audio/`](crates/jay-audio/) | The audio engine (Rust, no Tauri): microphone, WebRTC's audio processing, the effect chain and its effects, the Jay Link server |
 | [`frontend/`](frontend/) | Tauri v2 + vanilla JS app (Vite) |
-| [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Architecture, flows, stages and what was measured (in Portuguese) |
-| [`docs/REFERENCIAS.md`](docs/REFERENCIAS.md) | Notes from studying EasyEffects and Carla (ideas only, no code) |
+| [`docs/ARQUITETURA.en.md`](docs/ARQUITETURA.en.md) | Architecture, flows, stages and what was measured |
+| [`docs/REFERENCIAS.en.md`](docs/REFERENCIAS.en.md) | Notes from studying EasyEffects and Carla (ideas only, no code) |
 | [`scripts/`](scripts/) | Development tools: the app with debugging on, running JS in the real app, synthetic speech for tests, the README's screenshots |
 
 ## Running the app

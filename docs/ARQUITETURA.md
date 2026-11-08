@@ -1,5 +1,7 @@
 # Jay-A — Arquitetura
 
+**Português** · [English](ARQUITETURA.en.md)
+
 App de áudio da linha Jay: **filtros do microfone** (uma opção no Jay-C, no lugar do filtro dele, como o Krisp no Discord), **edição de áudio**, **soundboard** e **conversão de formatos**. Windows primeiro, como o áudio nativo do Jay-C.
 
 Escrito em 2026-11-06, a partir do Jay-C 0.4.0 (`b30199a`). O lado do Jay-C da integração está no `docs/JAY-A.md` do repositório JayC. As etapas 0 e 1 estão prontas; o que depende de medição está marcado como spike. O estudo do EasyEffects e do Carla, que embasa a cadeia de efeitos (seção 5), está em [`REFERENCIAS.md`](REFERENCIAS.md). Licença: **MIT** (D6).
@@ -103,7 +105,7 @@ flowchart LR
 Jay-A/
 ├─ package.json                  # npm workspaces: frontend
 ├─ LICENSE                       # MIT
-├─ docs/ARQUITETURA.md, docs/REFERENCIAS.md   # este plano; o estudo do EasyEffects e do Carla
+├─ docs/ARQUITETURA.md, docs/REFERENCIAS.md   # este plano; o estudo do EasyEffects e do Carla (cada um com um .en.md em inglês)
 ├─ crates/jay-audio/             # engine: sem Tauri, testável com cargo test
 │  ├─ build.rs                   # compila o WebRTC APM (Meson + MSVC), como no Jay-C
 │  ├─ native/jayc_apm.cpp        # camada C do APM, igual à do Jay-C
@@ -675,6 +677,6 @@ Cada etapa termina com algo testável.
 | D2 | Soundboard com o microfone mutado no Jay-C | **(a)** mutar silencia tudo: o soundboard vai junto com o microfone, sem mudar servidor nem protocolo · (b) faixa própria `soundboard` no SFU (muda o servidor, a sinalização e a UI de quem recebe) |
 | D3 | "Modificação de áudio" | assumido: editor de arquivos (etapa 6) **e** efeitos de voz ao vivo (etapa 7). Confirmar se os dois são desejados |
 | D4 ✅ | Microfone virtual para outros apps (Discord, OBS), como o do Voicemod | **Decidido: cabo virtual pronto** (pedido do usuário, 2026-11-07). Um driver próprio exigiria certificado EV pago e a assinatura da Microsoft. O Jay-A manda o microfone filtrado (e o soundboard) para a entrada de um cabo virtual já instalado (VB-Cable, Voicemeeter), e os outros apps escolhem a saída do cabo como microfone. Fica em Filtros › "Microfone para outros apps", salvo como `cable` no `config.json`. Enquanto o cabo está ligado, o microfone fica aberto. A compatibilidade com o Jay-C não muda. **Instalar o VB-CABLE (2026-11-07):** o VB-CABLE não pode ir dentro do instalador sem a licença de distribuidor da VB-Audio, e instalar um driver exige administrador. Por isso, o guia de Filtros › "Configurar o cabo virtual…" (no formato do guia de servidor do Jay-C) baixa o pacote oficial (`VBCABLE_Driver_Pack46.zip`, de download.vb-audio.com), confere que o instalador tem assinatura válida da VB-Audio (o certificado de Vincent Burel, `SERIALNUMBER=423 734 177`) e o abre pedindo administrador. Depois, acha o "CABLE Input" e liga a ponte sozinho. O README cita o VB-CABLE como requisito para outros apps. Testado pelo usuário no app de dev: o VB-CABLE instalou, o guia achou o "CABLE Input (VB-Audio Virtual Cable)" (e deixou de fora o "CABLE In 16ch" do mesmo pacote) e ligou a ponte. |
-| D5 | Versão em inglês desta documentação | depois, como o `ARQUITETURA.en.md` do Jay-C |
+| D5 ✅ | Versão em inglês desta documentação | **Feito (2026-11-08):** `ARQUITETURA.en.md` e `REFERENCIAS.en.md`, como o `ARQUITETURA.en.md` do Jay-C. O README em inglês linka esses, e cada doc linka o outro idioma logo abaixo do título. |
 | D6 ✅ | Licença do Jay-A | **Decidido: MIT**, como o Jay-C (pedido do usuário). O EasyEffects e o Carla servem de estudo, mas o código deles não entra (RNF-10). |
 | D7 | Plugins de terceiros (VST3/CLAP) na cadeia de filtros, como o Carla faz | fora do v1. Se entrar, segue o modelo do Carla: cada plugin num processo à parte, áudio por memória compartilhada, timeout por bloco (um plugin travado vira silêncio no lugar dele, não derruba a chamada) e versão de protocolo. Reavaliar depois da etapa 7 |
