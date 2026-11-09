@@ -2,7 +2,7 @@
 
 [English](README.md) · **Português**
 
-O app de áudio da linha Jay: filtros para o seu microfone, que o [Jay-C](https://github.com/TyxMatty/Jay-C) pode usar nas chamadas no lugar dos dele, e, mais adiante, edição de áudio, soundboard e conversão de formatos. Windows primeiro.
+O app de áudio da linha Jay: filtros para o seu microfone, que o [Jay-C](https://github.com/TyxMatty/Jay-C) pode usar nas chamadas no lugar dos dele, além de soundboard, editor de áudio e conversão de formatos. Windows primeiro.
 
 <p align="center"><img src="docs/images/chain.png" alt="A cadeia de efeitos do Jay-A: remoção de ruído, filtro, gate, equalizador, compressor e de-esser, com o filtro aberto mostrando os controles" width="820"></p>
 
@@ -38,6 +38,7 @@ Instale e atualize o Jay-A pelo **[Jay-H](https://github.com/TyxMatty/Jay-H)**, 
 | [`frontend/`](frontend/) | App Tauri v2 + JS puro (Vite) |
 | [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) | Arquitetura, fluxos, etapas e o que foi medido |
 | [`docs/REFERENCIAS.md`](docs/REFERENCIAS.md) | Notas do estudo do EasyEffects e do Carla (só ideias, nenhum código) |
+| [`ROADMAP.md`](ROADMAP.md) | O que está pronto e o que vem a seguir |
 | [`scripts/`](scripts/) | Ferramentas de desenvolvimento: o app com depuração, rodar JS no app de verdade, fala sintética para testes, os prints do README |
 
 ## Rodando o app

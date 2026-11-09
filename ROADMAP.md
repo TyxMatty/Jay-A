@@ -1,30 +1,36 @@
-# Jay-A roadmap
+# Roteiro do Jay-A
 
-Jay-A is the audio app of the Jay line: microphone filters for [Jay-C](https://github.com/TyxMatty/Jay-C) calls, a soundboard, an audio editor and format conversion. Windows first.
+**Português** · [English](ROADMAP.en.md)
 
-Every milestone ends with something testable. The full plan, with the "done when" checks and the measurements of each finished milestone, is in [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md) (in Portuguese), section 12.
+O Jay-A é o app de áudio da linha Jay: filtros do microfone para as chamadas do [Jay-C](https://github.com/TyxMatty/Jay-C) e para outros apps, soundboard, editor de áudio e conversão de formatos. Windows primeiro.
 
-## Done
+Cada etapa termina com algo testável. O plano completo, com o "pronto quando" e as medições de cada etapa terminada, está em [`docs/ARQUITETURA.md`](docs/ARQUITETURA.md), seção 12.
 
-- [x] **0. Scaffold:** Tauri v2 + Vite + vanilla JS, Jay-C's three styles (Calm, Neon, Soft), tray icon, single instance and `--background`.
-- [x] **1. Audio engine:** WASAPI microphone capture with WebRTC AudioProcessing (echo cancellation, noise suppression, automatic gain), "Hear my microphone" monitor and level meter.
-- [x] **2a. Effect chain engine:** parameters with ranges and scales, a reorderable rack swapped without locks, 10 ms crossfades, JSON presets and zero allocations on the audio thread.
-- [x] **2b. Effects:** filter, gate (with hysteresis and hold), 10-band equalizer, compressor, de-esser and limiter, plus the app's 4 presets. The whole chain uses about 0.5% of a CPU core.
-- [x] **2c. Filters tab:** build the chain by mouse or keyboard, controls generated from each parameter's spec, per-effect meters, total latency and presets (save, import, export).
-- [x] **2d. AI noise removal:** DeepFilterNet 3 and RNNoise as effects in the chain, for keyboard, clicks and background voices.
+## Pronto
 
-## Next
+- [x] **0. Scaffold:** Tauri v2 + Vite + JS puro, os três estilos do Jay-C (Calmo, Neon, Suave), ícone na bandeja, instância única e `--background`.
+- [x] **1. Engine de áudio:** captura do microfone por WASAPI com o AudioProcessing do WebRTC (cancelamento de eco, supressão de ruído, ganho automático), o "Ouvir meu microfone" e o medidor.
+- [x] **2a. Motor da cadeia de efeitos:** parâmetros com faixa e escala, um rack reordenável trocado sem lock, crossfade de 10 ms, presets em JSON e zero alocações na thread de áudio.
+- [x] **2b. Efeitos:** filtro, gate (com histerese e hold), equalizador de 10 bandas, compressor, de-esser e limitador, mais os 4 presets do app. A cadeia inteira usa cerca de 0,5% de um núcleo.
+- [x] **2c. Aba Filtros:** montar a cadeia com mouse ou teclado, controles gerados da descrição de cada parâmetro, medidores por efeito, latência total e presets (salvar, importar, exportar).
+- [x] **2d. Remoção de ruído por IA:** DeepFilterNet 3 e RNNoise como efeitos da cadeia, contra teclado, cliques e vozes ao fundo.
+- [x] **3. Servidor do Jay Link:** o microfone filtrado vai ao Jay-C por um named pipe local que só o mesmo usuário abre, a cada 20 ms (p99 de 20,4 ms no app instalado), com o áudio da chamada do Jay-C como referência de eco. As threads de áudio rodam com a prioridade "Pro Audio" do Windows, para a CPU ocupada não travá-las.
+- [x] **4. Soundboard:** clipes importados de qualquer formato comum, tocados por atalhos globais com outro app em foco, mixados na chamada e nos fones, com "parar tudo" e os clipes tirados do eco.
+- [x] **Microfone para outros apps:** o microfone filtrado e o soundboard chegam ao Discord, ao OBS e a outros pelo VB-CABLE gratuito, que o Jay-A baixa, confere e instala pelo instalador da própria VB-Audio.
+- [x] **5. Conversão de formatos:** conversão em lote para WAV, FLAC, MP3, OGG e Opus, uma tarefa por núcleo; um arquivo corrompido falha sozinho e os outros saem.
+- [x] **6. Editor de áudio:** cortar, fade, ganho, normalizar, inverter e aparar silêncio, com desfazer, prévia nos fones e exportação em qualquer formato da conversão.
+- [x] **Instalador e atualizações:** instalador NSIS por usuário (sem administrador) nos Releases do GitHub, instalado e atualizado pelo hub [Jay-H](https://github.com/TyxMatty/Jay-H).
+- [x] **Tour de boas-vindas e docs em inglês.**
 
-- [ ] **3. Jay Link server:** send the filtered voice to Jay-C over a local named pipe. Closing Jay-A mid-call must not cut the voice (Jay-C's own filter takes over), and other apps' sound must not be muffled. In progress.
-- [ ] **4. Soundboard:** clips played by a global hotkey, with a game in focus, reaching the call and the headphones without coming back as echo.
-- [ ] **5. Format conversion:** batch conversion to WAV, FLAC, MP3, OGG and Opus, where a corrupted file fails on its own and the others still convert.
-- [ ] **6. Audio editor:** cut, fade, normalize (LUFS) and export, with undo and a preview on the monitor.
-- [ ] **7. Voice effects:** pitch, robot and reverb as chain effects, with latency and CPU measured.
-- [ ] **8. Soundboard inside Jay-C:** a button in the call bar that lists and plays Jay-A's clips.
-- [ ] **9. Release:** an NSIS installer in `%LOCALAPPDATA%\Jay-A`, offered by Jay-C. Both apps installed on a clean machine make a filtered call, and Jay-C alone keeps working with its own filter.
+## A seguir
 
-## Open questions
+- [ ] **Jay Link numa chamada de verdade** (com a I5 do Jay-C): o eco removido, fechar o Jay-A no meio da chamada não corta a voz (o filtro do Jay-C assume) e o som de outros apps não fica abafado.
+- [ ] **Editor, o resto:** velocidade, normalização por loudness (LUFS) e aplicar um preset de filtros num arquivo.
+- [ ] **7. Efeitos de voz:** tom, robô e reverb como efeitos da cadeia, com latência e CPU medidas.
+- [ ] **8. Soundboard dentro do Jay-C:** um botão na barra da chamada que lista e toca os clipes do Jay-A.
+- [ ] **9. Release com o Jay-C:** o Jay-C oferece o Jay-A; os dois instalados numa máquina limpa fazem uma chamada filtrada, e o Jay-C sozinho continua funcionando com o filtro dele.
 
-- Soundboard with the microphone muted in Jay-C: mute everything (simple), or a separate soundboard track on the server.
-- An English version of the architecture document.
-- Third-party plugins (VST3/CLAP) in the chain, each in its own process: after milestone 7.
+## Decisões em aberto
+
+- Soundboard com o microfone mutado no Jay-C: mutar tudo (simples) ou uma faixa própria do soundboard no servidor.
+- Plugins de terceiros (VST3/CLAP) na cadeia, cada um no seu processo: depois da etapa 7.
