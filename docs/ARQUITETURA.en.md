@@ -134,6 +134,37 @@ By the 10 points:
 
 **Limits:** the whole path (download, run the setup, the NSIS closing and reopening Jay-A) is only proven with a release newer than the installed app, run outside this environment (here AppData is private); the workflow was not run on GitHub Actions either. The SHA-256 comes from GitHub, not from the code, and the installer is not signed. Unexported Editor edits are lost in the update. Another app using the virtual cable isn't detected: its call hears a gap of a few seconds.
 
+### 0.3.5: DeepFilterNet on tract 0.22 and Jay-I with WinHTTP
+
+0.3.4 was tagged and its installer was built, but it **was not published**: the dependency audit reported a vulnerability, and the `jay-i` crate had a limit behind a proxy. 0.3.5 carries what 0.3.4 brought (subsection above) plus three changes.
+
+**(a) RUSTSEC-2026-0217.** An integer overflow in `tract-nnef`'s NNEF reader (`read_tensor`): a crafted `.dat` file makes it read memory out of bounds while loading a model. Every `tract` 0.19 has it, and `libDF` v0.5.6 (DeepFilterNet) pinned `tract` to 0.19. Jay-A never called that reader (the model is ONNX, built into the `.exe`), but the vulnerable dependency shipped with it. No newer DeepFilterNet fits: its `main` uses `tract` 0.21, whose fixed versions need `time <0.3.42` (Tauri needs `^0.3.47`), and it also changes the processing (it skips frames after a quiet stretch). So `libDF` v0.5.6 was **copied** into `crates/jay-audio/third_party/deep_filter`, with its model, changing only: `tract` `^0.19.4` → `^0.22.2` and `ndarray` `^0.15` → `^0.16` in `Cargo.toml`, and `symbol_table` → `symbols` on three lines of `tract.rs` (the field was renamed in `tract`).
+
+**(b) The `jay-i` crate at commit `60de872dee82c5be37d2ea15c5f94d0dddffde26`.** In that commit it replaces `ureq` with `rustls` by Windows' WinHTTP: the update check and the download now use the proxy and the certificates set in the system. With `ureq`, behind a company proxy the pill would never show. The pin changed in both places (`frontend/src-tauri/Cargo.toml` and the `ref` of the second checkout in `installer.yml`); `ureq`, `rustls` and `ring` leave `Cargo.lock`.
+
+**(c) Audits in CI.** `.github/workflows/audit.yml`: `npm audit` (high and critical), `cargo audit` on both `Cargo.lock` files (app and engine) and gitleaks on the history (the release's own binary, checked by SHA-256), on every push, every pull request and every Monday. Before, Jay-A only had the installer workflow: the advisory came out and nobody was told.
+
+By the 10 points:
+
+1. **Attack surface.** No new boundary. The copy of `libDF` is third-party code that now lives in the repository: a change to it is now a commit of ours, visible in the diff. The NNEF reader is still never called; `tract` 0.22.5 has the fix anyway.
+2. **Access control / IDOR.** No change: no accounts, everything per user.
+3. **Data permissions.** No change: the model is the built-in one, no new file is read or written.
+4. **Untrusted input to a sensitive operation.** The outside inputs are the same (audio files, JSON presets, Jay Link messages) and none reaches `tract`: `denoise.rs` only calls `DfParams::default()`, the built-in model. `libDF`'s `DfParams::new(path)` only exists with the `bin` and `capi` features, which Jay-A does not enable (`tract` and `default-model` only). If a model chosen by the person ever comes in, this point has to be redone.
+5. **Exposed credentials.** None. gitleaks passed on the whole history in the first `audit.yml` run.
+6. **Authentication.** Does not apply.
+7. **Resource abuse and races.** Measured by the author of the change, with v0.5.6 on `tract` 0.19 beside it: CPU 0.430% against 0.437%, 40 ms latency in both, no late block. Loading the model got slower (about 300 ms against 210 ms, measured outside the app).
+8. **Dependency chain.** The point that weighs. `cargo audit` 0.23.0 (2026-11-11): **0 vulnerabilities** in both `Cargo.lock` files (600 crates in the app, 224 in the engine); the remaining warnings are unmaintained crates or come from Tauri's Linux build. The copy was checked against the code cargo had downloaded from tag `v0.5.6` (commit `978576a`): only `tract.rs` (3 lines) and `Cargo.toml` (5 lines) differ, and the model `DeepFilterNet3_onnx.tar.gz` is the same file (SHA-256 `c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616`). **Cost:** DeepFilterNet has been idle since 2023; with the copy, bumping `tract` when the next advisory comes out is our work. Drop the copy when it releases a version on a fixed `tract` that builds with Tauri. `jay-i` stays pinned by commit.
+9. **Network exposure.** The update request (one per app start) now goes through the Windows proxy, when there is one; what it reveals does not change (IP, user agent, time). Trusting Windows' certificates means trusting any root the machine's administrator installed, like every program that uses WinHTTP; whoever has that power can already replace `jay-a.exe`.
+10. **Adversarial tests and release criteria.** There is no attack test against the NNEF reader, because it cannot be reached. **Blocks the release:** a red `audit.yml` (`npm audit` high or critical, `cargo audit` with a vulnerability, a secret in the history), besides what already blocked it.
+
+**Measured:**
+- **The filter's output is bit for bit the same** as v0.5.6 on `tract` 0.19: outside the app (12 s of speech in 10 ms frames) and inside it, with the model loaded before the audio, on the four noises of the evaluation (keyboard, mouse, fan, voice behind). The session that made the change measured it; the review did not repeat the measurement.
+- **In the real-time test** the keyboard's SI-SDR went from 9.2–9.4 to 8.6–9.0. That is start-up: the old version, with its model load delayed by 135 to 270 ms, falls into the same range.
+- **Tests:** `npm test` 21 pass; `cargo test` 54 in the engine and 10 in the app; `cargo clippy` clean.
+- **The first `audit.yml` run** on GitHub passed (all three steps).
+
+**Limits:** the test `deepfilternet_turns_steady_noise_down_on_its_own_thread` depends on timing (it measures the cut after 1.5 s of a 2 s clip) and failed once in 4 runs of the engine suite during review, with the PC busy with another build; alone it passed 3 of 3. With the slower model load it got closer to its limit. Nobody listened for a difference, because the output is identical; if `tract` changes again, listening is needed again. A real update from start to finish is still unproven (subsection above). A real proxy (PAC/WPAD, a company root, NTLM) was only measured in the crate itself, with a local proxy.
+
 ## 3. Repository structure
 
 ```

@@ -2145,7 +2145,7 @@ dependencies = [
 
 [[package]]
 name = "jay-a"
-version = "0.3.4"
+version = "0.3.5"
 dependencies = [
  "jay-audio",
  "jay-i",

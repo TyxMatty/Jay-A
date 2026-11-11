@@ -1,6 +1,6 @@
 {
   "name": "frontend",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "private": true,
   "description": "Jay-A desktop app (Tauri v2 + Vanilla JS)",
   "license": "MIT",

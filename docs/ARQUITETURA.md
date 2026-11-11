@@ -132,6 +132,37 @@ Pelos 10 pontos:
 
 **Limites:** o caminho inteiro (baixar, rodar o setup, o NSIS fechar e reabrir o Jay-A) só se prova com uma release mais nova que o app instalado, rodada fora deste ambiente (aqui o AppData é privado); o workflow no GitHub Actions também não foi rodado. O SHA-256 vem do GitHub, não do código, e o instalador não é assinado. As edições do Editor não exportadas se perdem na atualização. Outro app usando o cabo virtual não é detectado: a chamada dele ouve um corte de alguns segundos.
 
+### A 0.3.5: o DeepFilterNet no tract 0.22 e o Jay-I com WinHTTP
+
+A 0.3.4 teve tag e instalador gerado, mas **não foi publicada**: a auditoria das dependências apontou uma vulnerabilidade, e a crate `jay-i` tinha um limite atrás de proxy. A 0.3.5 leva o que a 0.3.4 trazia (subseção acima) mais três mudanças.
+
+**(a) A RUSTSEC-2026-0217.** É um estouro de inteiro no leitor de NNEF da `tract-nnef` (`read_tensor`): um arquivo `.dat` manipulado faz ler memória fora dos limites ao carregar um modelo. Toda `tract` 0.19 tem a falha, e o `libDF` v0.5.6 (DeepFilterNet) prendia a `tract` na 0.19. O Jay-A nunca chamou esse leitor (o modelo é ONNX, embutido no `.exe`), mas a dependência vulnerável ia junto. Não há DeepFilterNet mais novo que sirva: o `main` dele usa a `tract` 0.21, cujas versões corrigidas pedem `time <0.3.42` (o Tauri pede `^0.3.47`), e ainda muda o processamento (pula quadros depois de um trecho quieto). Por isso o `libDF` v0.5.6 foi **copiado** para `crates/jay-audio/third_party/deep_filter`, com o modelo, mudando só: `tract` `^0.19.4` → `^0.22.2` e `ndarray` `^0.15` → `^0.16` no `Cargo.toml`, e `symbol_table` → `symbols` em três linhas do `tract.rs` (o campo mudou de nome na `tract`).
+
+**(b) A crate `jay-i` no commit `60de872dee82c5be37d2ea15c5f94d0dddffde26`.** Nesse commit ela troca o `ureq` com `rustls` pelo WinHTTP do Windows: a checagem de atualização e o download passam a usar o proxy e os certificados configurados no sistema. Com o `ureq`, atrás de um proxy de empresa a pílula nunca apareceria. O pin mudou nos dois lugares (`frontend/src-tauri/Cargo.toml` e o `ref` do segundo checkout no `installer.yml`); saem `ureq`, `rustls` e `ring` do `Cargo.lock`.
+
+**(c) Auditoria na CI.** `.github/workflows/audit.yml`: `npm audit` (alto e crítico), `cargo audit` nos dois `Cargo.lock` (app e motor) e gitleaks no histórico (o binário da release, conferido por SHA-256), a cada push, a cada pull request e toda segunda-feira. Antes o Jay-A só tinha o workflow do instalador: o aviso saiu e ninguém foi avisado.
+
+Pelos 10 pontos:
+
+1. **Superfície de ataque.** Nenhuma fronteira nova. A cópia do `libDF` é código de terceiros que agora mora no repositório: uma mudança nele passa a ser um commit nosso, visível no diff. O leitor de NNEF continua sem ser chamado; a `tract` 0.22.5 tem a correção de qualquer forma.
+2. **Controle de acesso / IDOR.** Sem mudança: sem contas, tudo por usuário.
+3. **Permissões de dados.** Sem mudança: o modelo é o embutido, nenhum arquivo novo é lido ou gravado.
+4. **Entrada não confiável até operação sensível.** As entradas de fora continuam as mesmas (arquivos de áudio, presets JSON, mensagens do Jay Link) e nenhuma chega à `tract`: o `denoise.rs` só chama `DfParams::default()`, que é o modelo embutido. O `DfParams::new(caminho)` do `libDF` só existe com as features `bin` e `capi`, que o Jay-A não liga (`tract` e `default-model` apenas). Se um dia um modelo escolhido pela pessoa entrar, este ponto precisa ser refeito.
+5. **Credenciais expostas.** Nenhuma. O gitleaks passou no histórico inteiro na primeira rodada do `audit.yml`.
+6. **Autenticação.** Não se aplica.
+7. **Abuso de recursos e corridas.** Medido pelo autor da mudança, com a v0.5.6 no `tract` 0.19 ao lado: CPU 0,430% contra 0,437%, latência de 40 ms nas duas, nenhum bloco atrasado. O carregamento do modelo ficou mais lento (cerca de 300 ms contra 210 ms, medido fora do app).
+8. **Cadeia de dependências.** É o ponto que pesa. `cargo audit` 0.23.0 (2026-11-11): **0 vulnerabilidades** nos dois `Cargo.lock` (600 crates no app, 224 no motor); os avisos que sobram são de crates sem manutenção ou do build de Linux do Tauri. A cópia foi conferida contra o código que o cargo tinha baixado da tag `v0.5.6` (commit `978576a`): só o `tract.rs` (3 linhas) e o `Cargo.toml` (5 linhas) diferem, e o modelo `DeepFilterNet3_onnx.tar.gz` é o mesmo arquivo (SHA-256 `c94d91f70911001c946e0fabb4aa9adc37045f45a03b56008cb0c8244cb63616`). **Custo:** o DeepFilterNet está parado desde 2023; com a cópia, atualizar a `tract` quando sair outro aviso passa a ser trabalho nosso. Largar a cópia quando ele lançar uma versão numa `tract` corrigida que compile com o Tauri. O `jay-i` segue fixado por commit.
+9. **Rede e exposição.** A consulta de atualização (uma por abertura do app) passa a ir pelo proxy do Windows, quando houver um; o que ela revela não muda (IP, agente, hora). Confiar nos certificados do Windows é confiar em qualquer raiz que o administrador da máquina instalou, como todo programa que usa o WinHTTP; quem tem esse poder já pode trocar o `jay-a.exe`.
+10. **Testes adversariais e critérios de release.** Não há teste de ataque contra o leitor de NNEF, porque ele não é alcançável. **Bloqueia a release:** o `audit.yml` vermelho (`npm audit` alto ou crítico, `cargo audit` com vulnerabilidade, segredo no histórico), além do que já bloqueava.
+
+**Medido:**
+- **A saída do filtro é idêntica bit a bit** à da v0.5.6 no `tract` 0.19: fora do app (12 s de fala em quadros de 10 ms) e dentro dele, com o modelo carregado antes do áudio, nos quatro ruídos da avaliação (teclado, mouse, ventilador, voz atrás). Quem mediu foi a sessão que fez a mudança; a medida não foi repetida na revisão.
+- **No teste em ritmo real** o SI-SDR do teclado caiu de 9,2 a 9,4 para 8,6 a 9,0. É o arranque: a versão antiga, com o carregamento atrasado de 135 a 270 ms, cai na mesma faixa.
+- **Testes:** `npm test` 21 passam; `cargo test` do motor 54 e do app 10; `cargo clippy` limpo.
+- **A primeira rodada do `audit.yml`** no GitHub passou (os três passos).
+
+**Limites:** o teste `deepfilternet_turns_steady_noise_down_on_its_own_thread` depende do tempo (mede o corte depois de 1,5 s de um trecho de 2 s) e falhou 1 vez em 4 rodadas da suíte do motor na revisão, com o PC ocupado por outra compilação; sozinho passou 3 de 3. Com o carregamento do modelo mais lento, ele ficou mais perto do limite. Ninguém ouviu a diferença, porque a saída é idêntica; se a `tract` mudar de novo, a escuta volta a ser necessária. A atualização de verdade, do começo ao fim, continua sem prova (subseção acima). Um proxy de verdade (PAC/WPAD, raiz de empresa, NTLM) foi medido só na própria crate, com um proxy local.
+
 ## 3. Estrutura do repositório
 
 ```
