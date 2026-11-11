@@ -8,7 +8,7 @@ fn main() {
 }
 
 /// Builds WebRTC's audio processing library (third_party/webrtc-audio-processing, BSD) with Meson
-/// + MSVC, plus the small C shim in native/, and links them. Needs Python with `meson` and `ninja`
+/// and MSVC, plus the small C shim in native/, and links them. Needs Python with `meson` and `ninja`
 /// on PATH (`py -m pip install meson ninja`). The first build also downloads abseil-cpp.
 mod webrtc_apm {
     use std::env;

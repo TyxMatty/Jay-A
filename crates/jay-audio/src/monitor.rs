@@ -171,7 +171,7 @@ mod tests {
         }
         client.stop_stream().unwrap();
         let bytes: Vec<u8> = raw.into_iter().collect();
-        let samples: Vec<f32> = bytes.chunks_exact(4).map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]])).collect();
+        let samples: Vec<f32> = bytes.as_chunks::<4>().0.iter().map(|b| f32::from_le_bytes(*b)).collect();
         tone_db(&samples[samples.len() / 2..], 440.0) // the second half: past the monitor's start-up
     }
 

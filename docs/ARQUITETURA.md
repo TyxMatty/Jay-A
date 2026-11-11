@@ -86,7 +86,7 @@ flowchart LR
 | Filtros próprios | Biquad (filtros e EQ), gate, compressor, de-esser e limitador **escritos à mão** em Rust | Cada um tem 30–80 linhas (receitas RBJ para os biquads). Não vale uma dependência, e o código GPL do EasyEffects não pode entrar. |
 | Cadeia de efeitos | **Rack**: uma lista ordenada de instâncias (`gate#0`, `eq#1`) que a pessoa monta, como o EasyEffects e o modo rack do Carla | A ordem certa depende da voz e do microfone; uma ordem fixa não serve a todos. O patchbay (grafo livre) do Carla é poder demais para voz. |
 | Parâmetros | Cada parâmetro tem padrão, mínimo, máximo, passo e escala (linear, logarítmica, dB), e todo valor recebido é clampado, como os `ParameterRanges` do Carla | A UI gera os controles a partir da descrição, e um preset com valor fora da faixa não quebra nada |
-| Supressão de ruído forte | `nnnoiseless` (RNNoise em Rust, BSD) e `libDF` (DeepFilterNet 3, MIT/Apache) **do repositório oficial** (git, tag `v0.5.6`: o crates.io só tem a 0.2), com o modelo embutido; o DeepFilterNet roda numa **thread própria**, como no plugin LADSPA oficial | As mesmas que o EasyEffects usa, com licenças compatíveis com MIT. A inferência do DeepFilterNet aloca memória e o estado dele não pode trocar de thread; na thread própria, a RNF-3 continua valendo, ao custo de um quadro (10 ms) a mais. Autorizado pelo usuário em 2026-11-06 (roda código de terceiros no build). |
+| Supressão de ruído forte | `nnnoiseless` (RNNoise em Rust, BSD) e `libDF` (DeepFilterNet 3, MIT/Apache): a **v0.5.6 oficial copiada** em `crates/jay-audio/third_party/deep_filter` e passada do tract 0.19 para o 0.22 na 0.3.5, por causa da RUSTSEC-2026-0217 (o crates.io só tem a 0.2), com o modelo embutido; o DeepFilterNet roda numa **thread própria**, como no plugin LADSPA oficial | As mesmas que o EasyEffects usa, com licenças compatíveis com MIT. A inferência do DeepFilterNet aloca memória e o estado dele não pode trocar de thread; na thread própria, a RNF-3 continua valendo, ao custo de um quadro (10 ms) a mais. Autorizado pelo usuário em 2026-11-06 (roda código de terceiros no build). |
 | Loudness | `ebur128` (MIT) | Normalizar em LUFS no editor e na conversão, como o autogain do EasyEffects (libebur128) |
 | Licença | **MIT** (D6), arquivo `LICENSE` | Igual ao Jay-C |
 | Decodificar | **symphonia** (Rust puro, MPL-2.0) | MP3, AAC/M4A, FLAC, WAV, OGG Vorbis, ALAC, AIFF. Arquivos do usuário são entrada não confiável, e Rust puro evita bugs de memória num decodificador em C. |
@@ -143,6 +143,7 @@ Jay-A/
 │  ├─ build.rs                   # compila o WebRTC APM (Meson + MSVC), como no Jay-C
 │  ├─ native/jayc_apm.cpp        # camada C do APM, igual à do Jay-C
 │  ├─ third_party/webrtc-audio-processing/   # igual à do Jay-C
+│  ├─ third_party/deep_filter/   # libDF v0.5.6 (DeepFilterNet) no tract 0.22, com o modelo (0.3.5)
 │  └─ src/
 │     ├─ lib.rs                  # constantes, level_db
 │     ├─ apm.rs                  # igual ao do Jay-C (com o teste de eco)
