@@ -1,6 +1,6 @@
 [package]
 name = "jay-a"
-version = "0.3.3"
+version = "0.3.4"
 description = "Jay-A — audio filters, editing, soundboard and conversion"
 authors = ["TyxMatty"]
 license = "MIT"
@@ -18,6 +18,8 @@ jay-audio = { path = "../../crates/jay-audio" }
 tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 tauri-plugin-dialog = "2"
+# The shared updater of the Jay line; bump together with the Jay-I `ref` in .github/workflows/installer.yml.
+jay-i = { git = "https://github.com/TyxMatty/Jay-I", rev = "f4f9ef07c0cf49abd1f53d3caa00c69e5aa1c90a" }
 
 [profile.release]
 # Smaller, leaner binaries (same as Jay-C).

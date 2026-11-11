@@ -89,6 +89,9 @@ select {
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   backdrop-filter: blur(var(--overlay-blur));
+  /* Holds the update panel above the sections. */
+  position: relative;
+  z-index: 10;
 }
 
 /* With a background gradient, the bar lets it through; 75% surface keeps its text readable. */
@@ -1430,11 +1433,58 @@ fieldset > h3 {
   color: var(--text-muted);
   pointer-events: none;
 }
+/* The update pill (ui/update.js) sits next to the Jay-C pill, which already pushes both to the right. */
+.update-pill {
+  margin-left: 0;
+}
+.update-pill::before {
+  background: var(--accent);
+}
+
+/* The update panel: under the top bar, anchored to its right edge; not a modal. */
+.update-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 16px;
+  display: grid;
+  gap: 12px;
+  box-sizing: border-box;
+  width: min(360px, calc(100vw - 32px));
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.update-panel h2,
+.update-panel p {
+  margin: 0;
+}
+.update-panel progress {
+  width: 100%;
+  accent-color: var(--accent);
+}
+.update-what {
+  display: grid;
+  gap: 8px;
+}
+.update-status:empty {
+  /* Still in the page, so the live region is heard when it fills; without its gap. */
+  height: 0;
+  margin-top: -12px;
+}
+.update-panel .button-row {
+  margin-top: 8px;
+}
+.update-panel .button-row:not(:has(button:not([hidden]))) {
+  display: none;
+}
+
 @media (max-width: 600px) {
   .app-version {
     display: none;
   }
-  .status-pill {
+  .status-pill:not(.update-pill) {
     display: none;
   }
 }

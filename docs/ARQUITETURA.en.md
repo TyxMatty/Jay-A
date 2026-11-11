@@ -74,7 +74,7 @@ flowchart LR
 | RNF-9 Platform | Windows 10 2004 or newer, x64, WebView2 | — |
 | RNF-10 License | Jay-A is **MIT**. Permissive dependencies (MIT, BSD, Apache, per-file MPL); LGPL only if the user can swap the library (which is the case in an open-source app). GPL code, like EasyEffects' and Carla's, doesn't go in | `cargo tree` and `package-lock.json` reviewed with each new dependency |
 | RNF-11 Accessibility and language | Everything works from the keyboard, with labels for screen readers; the contrast of Jay-C's styles; all text in English and in Portuguese | `npm test` (the translations test) |
-| RNF-12 Size | Installer of up to 20 MB, counting the noise suppression models (Jay-C's is 1.5 MB) | the installer `.exe` |
+| RNF-12 Size | Installer of up to 20 MB, counting the noise suppression models (Jay-C's is 1.5 MB). Since 0.3.4, the published file is the Jay-I setup, which carries the NSIS inside (the workflow fails above 20 MB) | the installer `.exe` |
 
 ## 2. Technical decisions
 
@@ -97,9 +97,42 @@ flowchart LR
 | Why not ffmpeg | — | A full ffmpeg is ~80–130 MB, and the Jay line is light (Jay-C is 3.9 MB). And the file effects would be ffmpeg filters, different from the microphone's: two implementations. With its own engine, **the same filter chain works live and on files**. |
 | Global shortcuts | `tauri-plugin-global-shortcut` | Playing the soundboard with a game in focus. |
 | Tray and single instance | Tauri's `tray-icon` + `tauri-plugin-single-instance` | Jay-C can start Jay-A without opening a second engine. |
-| Updates | **Through Jay-H**, the line's hub: it reads the latest GitHub release, downloads the `*_x64-setup.exe`, checks the SHA-256 and runs the installer | The user's request: one system for the whole line, instead of an updater in each app. New version: bump the version in `tauri.conf.json`, `frontend/package.json` and `Cargo.toml`; commit; tag `vX.Y.Z` and push it; wait for `installer.yml`; publish the artifact's `.exe` in a release with the same tag (`gh release create vX.Y.Z --verify-tag <exe>`). |
+| Updates | **Through Jay-I**, the line's single system: **Jay-H** reads the latest GitHub release, downloads the `*_x64-setup.exe`, checks the SHA-256 and runs the setup, and **Jay-A itself** does the same with the `jay-i` crate (a pill in the top bar says a new version is out). The release file is the Jay-I setup, which carries the NSIS inside | The user's request: one system for the whole line, instead of a different updater in each app. Jay-I is that single piece of code, used by the hub and by each app. Details and the 10 points: subsection "The Jay-I setup and self-update", at the end of this section. New version: bump the version in `tauri.conf.json`, `frontend/package.json` and `Cargo.toml`; commit; tag `vX.Y.Z` and push it; wait for `installer.yml`; publish the artifact's setup in a release with the same tag (`gh release create vX.Y.Z --verify-tag <exe>`). |
 | Persistence | **`config.json`** in the app's config folder, read by the engine | The engine needs the filters even with the window closed, so the configuration can't live in the page's `localStorage` (as in Jay-C). The UI reads and writes it through commands. The chain lives in `chain.json` (since 2c) and the user's presets in `presets/`; the microphone options (device, noise suppression, automatic gain) moved to `config.json` in stage 3. Only the UI preferences and "Hear my microphone" stay in `localStorage`. |
 | Internal format | 48 kHz, f32, 10 ms frames (480 samples) | It's the APM's and RNNoise's frame. The link delivers 20 ms blocks, like Jay-C's native microphone today. |
+
+### The Jay-I setup and self-update
+
+Version 0.3.4. Two changes. **(a)** The release file becomes the Jay-I setup: `installer.yml` builds Tauri's NSIS as before, checks out the `TyxMatty/Jay-I` repository (a second checkout) at commit `f4f9ef07c0cf49abd1f53d3caa00c69e5aa1c90a` and runs its `jay-i/scripts/build-setup.ps1` with the NSIS inside. The result is `setup-out/Jay-A_<version>_x64-setup.exe`, a small window with the line's look that runs the NSIS silently; only the `setup-out/` folder is uploaded as the artifact. The name is the same as before, so Jay-H (which takes any release file ending in `_x64-setup.exe`) keeps working. Every `uses:` in the workflow is now pinned by a 40-digit SHA, with the version in a comment. The step fails if the setup is over 20 MB or has the raw NSIS's size. **(b)** Jay-A updates itself with the `jay-i` crate (a git dependency, same commit, in `frontend/src-tauri/Cargo.toml`): `src-tauri/src/update.rs`, two commands, and the "Update to X" pill next to the Jay-C pill in the top bar (`ui/update.js`, `core/update.js`).
+
+**Size (RNF-12):** Jay-A's limit is 20 MB. The raw NSIS of 0.3.3 published on GitHub is 13,465,158 bytes (12.8 MiB). Jay-S's setup came out about 3.4 MB bigger than its NSIS; here that would go past the 15 MB the line uses, so Jay-A uses RNF-12's 20 MB. Measured: the 0.3.4 setup is 17,348,608 bytes (16.5 MiB), around an NSIS of 14,120,879 bytes (13.5 MiB).
+
+- **The check:** once per app start (`update_check` keeps the answer in a `OnceLock`; reloading the page doesn't ask again), on a worker thread (`spawn_blocking`), never on the window's. A version is offered only if `pick_installer` accepts the release (this repository's address, plain name, size, SHA-256 from GitHub's digest) **and** `newer(tag, current)`. Any error becomes "nothing": no network, no pill, no warning.
+- **The install:** clicking the pill opens a small panel under the bar (not a dialog; nothing shows up on its own when the app opens): what will happen, "Install update" and "Not now", a progress bar with the percentage and, on error, the message with "Try again". Escape closes it; the status goes to an `aria-live` region; everything in both languages. "Install" calls `update_install`, which fetches the release again, checks again, downloads (progress through the `update-download` event), checks the SHA-256, runs the setup with `/P /UPDATE /R` and exits.
+- **The exit:** Jay-A's settings (`config.json`, `chain.json`, the soundboard) are written on every change, so nothing needs saving. The microphone, the virtual cable output, the soundboard and the Jay Link pipe end with the process; the on-screen mic test and the editor preview just stop. The app exits through `app.exit(0)`, the same path as the tray's Quit. **What is lost:** Editor edits that weren't exported (the editor keeps them in memory only); the panel says so before the button.
+- **What is refused** (with a message; nothing is cut): `busy`, another update running; `call`, Jay-C is using Jay-A's microphone or is in a call (`MicState::in_call`), because the restart would cut the voice mid-sentence; `working`, a conversion batch is running (`ConvertState::running`), because quitting would leave half-written files. The last two checks run again after the download, before running the setup (and the downloaded folder is deleted if it is refused then).
+- **Not detected:** another app (Discord, OBS) using the virtual cable microphone. The cable comes back when Jay-A reopens (it resumes at start), but that call hears a gap of a few seconds. This is a known limit.
+
+By the 10 points:
+
+1. **Attack surface.** Two new commands with no argument from the page (`update_check`, `update_install`); one new event (`update-download`); one request to `api.github.com` per start; the setup download, from GitHub's release addresses, only after the click; one new process, the setup. In CI: the checkout of another repository (Jay-I) and a `cargo build` of it. *Checked:* the commands in the code and in the tests. *Not checked:* a setup actually downloaded (it needs a release newer than the installed one).
+2. **Access control / IDOR.** The page doesn't choose a repository, address, file or path: `REPO` is a constant and the two commands only receive the `AppHandle` (`update.test.js` reads the signatures in `update.rs` and fails on any other parameter).
+3. **Data permissions.** The update doesn't read or write the user's settings, chain, clips or audio. The downloaded setup goes to a new folder in `%TEMP%`; if the check fails or the update is refused, it is deleted. The update (`/UPDATE`) keeps the data folder and the settings.
+4. **Untrusted input to a sensitive operation.** GitHub's answer is JSON with a size cap; the setup runs only if its size and SHA-256 match the `digest` GitHub computed for that file (`jay_i::download`, tested in the crate). The version reaches the page only as text (`h()`/`textContent`). **Limit:** the SHA-256 comes from GitHub itself, not from the code: whoever controls the project's GitHub account controls what runs. The installers are **not signed** (no code signing; SmartScreen says "unknown publisher").
+5. **Exposed credentials.** None: the GitHub API is called with no token and no cookie; the Jay-I checkout keeps no credentials and the workflow only has read permission.
+6. **Authentication.** Not applicable (public repository, no account).
+7. **Resource abuse and races.** One update at a time: `Update::begin` (an `AtomicBool`) refuses the second call with `busy` until the first ends (a `cargo` test); the page also ignores "install" while downloading. A size cap on the download and a timeout on the network (in the crate). One check per start, not a loop. The race between the download and a call or conversion that starts in the meantime is covered by the repeated check before the setup. **Not measured:** the end-to-end time of an update.
+8. **Dependency chain.** One git dependency, `jay-i`, pinned by commit (`rev`), not by branch; in the workflow, the second checkout of `TyxMatty/Jay-I` is pinned to the same commit (`installer.test.js` requires the two to be equal and every `uses:` to be a 40-digit SHA). New crates from `jay-i`: `ureq` 3.5.1, `rustls` 0.23.46, `ring` 0.17.14, `webpki-roots` 1.0.12, `winreg`, `cookie_store` and others (`sha2` was already there). `cargo audit --file frontend/src-tauri/Cargo.lock`: 1 vulnerability, RUSTSEC-2026-0217 in `tract-nnef` 0.19.16 (it comes from DeepFilterNet's `deep_filter` 0.5.6; it is the NNEF parser at model load, and the model is the one embedded in the binary, not a user file), and 8 allowed warnings (`anymap2`, `paste`, `proc-macro-error`, `zbus_names`, `zvariant`, `zvariant_derive` unmaintained; `glib` 0.18.5 and `memmap2` 0.5.10 unsound): exactly the same result as the `Cargo.lock` before this change (measured on both). None comes from `jay-i`.
+9. **Network exposure.** One HTTPS request to `api.github.com/repos/TyxMatty/Jay-A/releases/latest` at every start, with the user agent `Jay-A/<version>`. It reveals to GitHub the IP, the user agent (so the installed version) and the time; no token, no cookie, nothing from the user. The setup download comes only from GitHub's release addresses and only after the click. The page still has no external address: all network is in Rust, and the CSP (`connect-src 'self' ipc: http://ipc.localhost`) stays locked by `installer.test.js`.
+10. **Adversarial tests and release criteria.** Rust (`update.rs`): a newer version is offered only with a checked installer from this repository and with a digest; a second update is refused until the first ends. JS (`update.test.js`): the state machine of the pill and panel; the commands take only the `AppHandle`. `installer.test.js`: Jay-I by 40-digit SHA, the same one in `Cargo.toml`, the artifact coming only from `setup-out/`, the 20 MB check, the CSP without an external address. **Blocks the release:** these tests failing; the setup above 20 MB or with the raw NSIS's size (the workflow fails).
+
+**Measured (2026-11-10):**
+- **Tests:** `npm test` 21 pass (new: `update.test.js` and `installer.test.js`); `cargo test` 10 pass (new: the two in `update.rs`); `cargo clippy --all-targets -- -D warnings` clean.
+- **`cargo audit`:** see point 8: the same result as before the change.
+- **The pill, the panel, the progress and the error, by screenshot** (dev app, light and dark, in English): the fake version 0.3.5 went through the page's own `offerUpdate`, and the IPC was intercepted at `fetch` (proven first on a harmless command, `link_state`), so the real `update_install` never ran. The 42% progress came from an `update-download` event that went through Rust's event bus; the `call` refusal showed "Jay-C is using the microphone. Try again after the call." with focus on "Try again". The pill sits next to Jay-C's, the panel under the bar without covering the pill; nothing cramped or overlapping.
+- **The setup:** the workflow step run by hand (Jay-I's `build-setup.ps1` at the pinned commit, in PowerShell 5.1 with `CARGO_TERM_QUIET=true`, because it treats cargo's output as an error; CI uses `pwsh`): 17,348,608 bytes, under 20 MB and not the raw NSIS's size. The setup was not run.
+
+**Limits:** the whole path (download, run the setup, the NSIS closing and reopening Jay-A) is only proven with a release newer than the installed app, run outside this environment (here AppData is private); the workflow was not run on GitHub Actions either. The SHA-256 comes from GitHub, not from the code, and the installer is not signed. Unexported Editor edits are lost in the update. Another app using the virtual cable isn't detected: its call hears a gap of a few seconds.
 
 ## 3. Repository structure
 
@@ -134,17 +167,21 @@ Jay-A/
    ├─ src/
    │  ├─ main.js
    │  ├─ styles/                 # theme.css and app.css (Jay-C's base)
-   │  ├─ core/                   # i18n.js, style.js, appearance.js (from Jay-C); engine.js (invoke + Channel)
+   │  ├─ core/                   # i18n.js, style.js, appearance.js (from Jay-C); engine.js (invoke + Channel);
+   │  │                          # update.js: the update state (pill and panel)
    │  ├─ ui/                     # dom.js, icons.js, tabs.js (from Jay-C); filters.js, soundboard.js,
-   │  │                          # editor.js, converter.js, settings-modal.js
+   │  │                          # editor.js, converter.js, settings-modal.js; update.js: the pill and panel
    │  │                          # window-icon.js: the wolf in the style (window, taskbar, tray)
    │  ├─ locales/pt-BR.js
    │  └─ store/settings.js       # UI preferences only (theme, style, language)
+   ├─ test/                      # node:test; update.test.js (the state machine and the argument-free commands)
+   │                             # and installer.test.js (pinned SHAs, upload from setup-out/, 20 MB, CSP)
    └─ src-tauri/
       ├─ tauri.conf.json         # productName "Jay-A", identifier io.github.tyxmatty.jaya
       ├─ icons/                  # copy of Jay-C's icons
       └─ src/main.rs             # commands → jay-audio, tray, single instance, shortcuts;
-                                 # taskbar_icon.rs: the taskbar icon (from Jay-C)
+                                 # taskbar_icon.rs: the taskbar icon (from Jay-C);
+                                 # update.rs: self-update through the jay-i crate
 ```
 
 There's no server: Jay-A is local only.
@@ -538,7 +575,7 @@ Each stage ends with something testable.
 | 6 ✅ | Editor | cut, fade, normalize and export; undo goes back to the previous state; the preview plays on the monitor |
 | 7 | Voice effects (pitch, robot, reverb) (S4) | each effect goes in the chain like the stage 2 ones; latency and CPU measured |
 | 8 | Soundboard inside Jay-C | the button in the call bar lists and plays Jay-A's clips |
-| 9 | Release: Jay-A's NSIS installer in `%LOCALAPPDATA%\Jay-A`; Jay-C offers Jay-A | both installed on a clean machine make a filtered call; Jay-C alone keeps working with its own filter |
+| 9 | Release: Jay-A's NSIS installer in `%LOCALAPPDATA%\Jay-A`; Jay-C offers Jay-A; in 0.3.4, the Jay-I setup as the release file and self-update (section 2, "The Jay-I setup and self-update") | both installed on a clean machine make a filtered call; Jay-C alone keeps working with its own filter |
 
 **Stage 1, measured (2026-11-06):**
 - **Echo test** (`cargo test`): −35.0 dB without AEC and −68.2 dB with AEC, 33 dB removed, same as Jay-C.

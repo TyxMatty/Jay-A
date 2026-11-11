@@ -21,7 +21,7 @@ Every stage ends with something testable. The full plan, with the "done when" ch
 - [x] **Microphone for other apps:** the filtered microphone and the soundboard reach Discord, OBS and others through the free VB-CABLE, which Jay-A downloads, checks and installs from VB-Audio's own setup.
 - [x] **5. Format conversion:** batch conversion to WAV, FLAC, MP3, OGG and Opus, one task per core, where a corrupted file fails on its own and the others still convert.
 - [x] **6. Audio editor:** cut, fade, gain, normalize, reverse and trim silence, with undo, a preview in the headphones and export to any conversion format.
-- [x] **Installer and updates:** a per-user NSIS installer (no admin rights) on GitHub Releases, installed and updated from the [Jay-H](https://github.com/TyxMatty/Jay-H) hub.
+- [x] **Installer and updates:** a per-user NSIS installer (no admin rights) on GitHub Releases, inside the Jay-I setup; installed and updated from the [Jay-H](https://github.com/TyxMatty/Jay-H) hub and by the app itself (a pill announces the new version).
 - [x] **Welcome tour and English docs.**
 
 ## Next

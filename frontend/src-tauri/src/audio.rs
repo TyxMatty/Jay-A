@@ -82,6 +82,11 @@ impl MicState {
         MicState { engine: Mutex::new(engine), config }
     }
 
+    /// Jay-C is using the microphone or is in a call: a restart would cut the voice mid-sentence.
+    pub fn in_call(&self) -> bool {
+        self.lock().is_ok_and(|e| e.jay_c.as_ref().is_some_and(|j| j.wants_mic || j.in_call))
+    }
+
     fn lock(&self) -> Result<MutexGuard<'_, Engine>, String> {
         self.engine.lock().map_err(|e| e.to_string())
     }

@@ -283,4 +283,17 @@ export default {
     "Fechar a janela deixa o Jay-A na bandeja, perto do relógio. Pra sair, clique com o botão direito no ícone dele lá.",
   "Open Jay-A": "Abrir o Jay-A",
   "Quit": "Sair",
+  "Update to {version}": "Atualizar pra {version}",
+  "Jay-A closes, installs the update and opens again.": "O Jay-A fecha, instala a atualização e abre de novo.",
+  "Your filters, presets and soundboard are kept. Edits in the Editor that you haven't exported are lost.":
+    "Seus filtros, presets e o soundboard ficam. Edições no Editor que você não exportou se perdem.",
+  "Install update": "Instalar atualização",
+  "Try again": "Tentar de novo",
+  "Not now": "Agora não",
+  "Downloading the update… {percent}%": "Baixando a atualização… {percent}%",
+  "Installing: Jay-A closes now.": "Instalando: o Jay-A fecha agora.",
+  "Jay-C is using the microphone. Try again after the call.": "O Jay-C está usando o microfone. Tente de novo depois da chamada.",
+  "A conversion is running. Try again when it finishes.": "Uma conversão está em andamento. Tente de novo quando ela terminar.",
+  "The update is already running.": "A atualização já está em andamento.",
+  "The update failed.": "A atualização falhou.",
 };

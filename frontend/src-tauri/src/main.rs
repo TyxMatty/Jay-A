@@ -15,6 +15,8 @@ mod editor;
 mod cable_setup;
 #[cfg(windows)]
 mod taskbar_icon;
+#[cfg(windows)]
+mod update;
 
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -133,6 +135,10 @@ fn main() {
             #[cfg(windows)]
             editor::editor_export,
             #[cfg(windows)]
+            update::update_check,
+            #[cfg(windows)]
+            update::update_install,
+            #[cfg(windows)]
             soundboard::soundboard_update,
             #[cfg(windows)]
             soundboard::soundboard_remove,
@@ -191,6 +197,7 @@ fn main() {
                 soundboard::register_hotkeys(app.handle());
                 app.manage(convert::ConvertState::default());
                 app.manage(editor::EditorState::default());
+                app.manage(update::Update::default());
             }
             // The window starts hidden (tauri.conf.json), so --background never flashes it.
             if !background(&std::env::args().collect::<Vec<_>>()) {

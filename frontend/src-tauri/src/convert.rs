@@ -21,6 +21,13 @@ const AUDIO: &[&str] = &["wav", "flac", "mp3", "ogg", "opus", "m4a", "aac", "mp4
 #[derive(Default)]
 pub struct ConvertState(Mutex<Option<Arc<AtomicBool>>>);
 
+impl ConvertState {
+    /// A batch is running (the batch thread holds a second reference to the cancel flag).
+    pub fn running(&self) -> bool {
+        self.0.lock().is_ok_and(|c| c.as_ref().is_some_and(|c| Arc::strong_count(c) > 1))
+    }
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Request {

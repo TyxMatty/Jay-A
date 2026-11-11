@@ -19,7 +19,7 @@ Cada etapa termina com algo testável. O plano completo, com o "pronto quando" e
 - [x] **Microfone para outros apps:** o microfone filtrado e o soundboard chegam ao Discord, ao OBS e a outros pelo VB-CABLE gratuito, que o Jay-A baixa, confere e instala pelo instalador da própria VB-Audio.
 - [x] **5. Conversão de formatos:** conversão em lote para WAV, FLAC, MP3, OGG e Opus, uma tarefa por núcleo; um arquivo corrompido falha sozinho e os outros saem.
 - [x] **6. Editor de áudio:** cortar, fade, ganho, normalizar, inverter e aparar silêncio, com desfazer, prévia nos fones e exportação em qualquer formato da conversão.
-- [x] **Instalador e atualizações:** instalador NSIS por usuário (sem administrador) nos Releases do GitHub, instalado e atualizado pelo hub [Jay-H](https://github.com/TyxMatty/Jay-H).
+- [x] **Instalador e atualizações:** instalador NSIS por usuário (sem administrador) nos Releases do GitHub, dentro do setup do Jay-I; instalado e atualizado pelo hub [Jay-H](https://github.com/TyxMatty/Jay-H) e pelo próprio app (uma pílula avisa da versão nova).
 - [x] **Tour de boas-vindas e docs em inglês.**
 
 ## A seguir

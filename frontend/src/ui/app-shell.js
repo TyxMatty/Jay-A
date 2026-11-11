@@ -14,6 +14,7 @@ import { toggleTheme, currentTheme } from './theme.js';
 import { settings } from '../store/settings.js';
 import { resolveStyle } from '../core/style.js';
 import { t } from '../core/i18n.js';
+import { createUpdatePill } from './update.js';
 
 /** Each language in its own name, so it can be found whichever one is showing. */
 const LANGUAGES = [
@@ -193,6 +194,7 @@ export function mountApp(root) {
     { class: 'topbar' },
     h('div', { class: 'brand' }, h('span', { class: 'brand-mark wolf-mark', 'aria-hidden': 'true' }), h('span', { class: 'brand-name' }, 'Jay', h('span', {}, '-'), 'A')),
     createStatusPill(() => tabs.select('filters')),
+    createUpdatePill(),
     createThemeToggle(),
   );
 

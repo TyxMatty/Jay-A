@@ -28,7 +28,7 @@ O app de áudio da linha Jay: filtros para o seu microfone, que o [Jay-C](https:
 
 ## Download
 
-Instale e atualize o Jay-A pelo **[Jay-H](https://github.com/TyxMatty/Jay-H)**, o hub da linha Jay. Ou baixe o `Jay-A_<versão>_x64-setup.exe` do **[último release](https://github.com/TyxMatty/Jay-A/releases/latest)**: ele atualiza uma versão anterior no lugar e mantém as suas configurações. Todas as versões estão em [releases](https://github.com/TyxMatty/Jay-A/releases).
+Instale e atualize o Jay-A pelo **[Jay-H](https://github.com/TyxMatty/Jay-H)**, o hub da linha Jay. Ou baixe o `Jay-A_<versão>_x64-setup.exe` (o setup do Jay-I) do **[último release](https://github.com/TyxMatty/Jay-A/releases/latest)**: ele atualiza uma versão anterior no lugar e mantém as suas configurações. O Jay-A também se atualiza sozinho: quando sai uma versão nova, aparece uma pílula na barra de cima, e nada é instalado até você clicar. Todas as versões estão em [releases](https://github.com/TyxMatty/Jay-A/releases).
 
 ## Código
 
@@ -61,7 +61,7 @@ target-dir = "C:/Users/<você>/.cargo-target/jay-a"
 
 ## Releases
 
-Um tag de versão (`v*`) gera o instalador no GitHub Actions ([`installer.yml`](.github/workflows/installer.yml)); publicá-lo num release com o mesmo tag entrega a atualização pelo Jay-H.
+Um tag de versão (`v*`) gera o instalador no GitHub Actions ([`installer.yml`](.github/workflows/installer.yml)); publicá-lo num release com o mesmo tag entrega a atualização pelo Jay-H e pelo próprio app. O arquivo é o setup do Jay-I, com o mesmo nome de antes.
 
 ## Testes
 
